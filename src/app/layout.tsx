@@ -1,6 +1,4 @@
 import type { Metadata } from 'next';
-import { GeistSans } from '@vercel/geist/sans';
-import { GeistMono } from '@vercel/geist/mono';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -15,12 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      {/* <body>タグのclassNameにそれぞれのフォントのvariableプロパティを適用します */}
-      <body
-        className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}
-      >
-        {children}
-      </body>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }
