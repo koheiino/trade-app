@@ -774,7 +774,7 @@ function TradingDiary({ user }: { user: User }) {
                   <Tooltip
                     content={({ active, payload }) => {
                       if (active && payload && payload[0]) {
-                        const value = payload[0].value ?? 0;
+                        const value = (payload[0].value as number) ?? 0;
                         return (
                           <div className="bg-white p-3 rounded-lg shadow-lg border">
                             <p className="text-sm text-gray-600">
