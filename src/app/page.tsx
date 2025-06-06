@@ -774,16 +774,16 @@ function TradingDiary({ user }: { user: User }) {
                   <Tooltip
                     content={({ active, payload }) => {
                       if (active && payload && payload[0]) {
+                        const value = payload[0].value ?? 0;
                         return (
                           <div className="bg-white p-3 rounded-lg shadow-lg border">
                             <p className="text-sm text-gray-600">
                               {payload[0].payload.date}
                             </p>
                             <p
-                              className={`font-bold ${payload[0].value >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                              className={`font-bold ${value >= 0 ? 'text-green-600' : 'text-red-600'}`}
                             >
-                              {payload[0].value >= 0 ? '+' : ''}¥
-                              {payload[0].value?.toLocaleString()}
+                              {value >= 0 ? '+' : ''}¥{value.toLocaleString()}
                             </p>
                           </div>
                         );
