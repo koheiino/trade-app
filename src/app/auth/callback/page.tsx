@@ -28,7 +28,7 @@ export default function AuthCallback() {
             .from('user_stats')
             .select('*')
             .eq('user_id', session.user.id)
-            .single();
+            .maybeSingle();
 
           // 新規ユーザーの場合
           if (!userStats) {

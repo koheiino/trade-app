@@ -103,7 +103,7 @@ export default function SettingsPage() {
         .from('user_stats')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (stats) {
         setUserStats(stats);
@@ -188,17 +188,19 @@ export default function SettingsPage() {
     if (!user || deleteConfirmation !== 'DELETE') return;
 
     try {
-      // まず関連データを削除
+      // データのみ削除（Edge Function未実装のため）
       await supabase.from('trades').delete().eq('user_id', user.id);
       await supabase.from('daily_entries').delete().eq('user_id', user.id);
       await supabase.from('user_stats').delete().eq('user_id', user.id);
 
-      // アカウントを削除
+      // サインアウト
       await supabase.auth.signOut();
+
+      // ホームにリダイレクト
       router.push('/');
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error deleting account:', error);
-      setMessage({ type: 'error', text: 'アカウントの削除に失敗しました' });
+      setMessage({ type: 'error', text: 'データの削除に失敗しました' });
     }
   };
 
