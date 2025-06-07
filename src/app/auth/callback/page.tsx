@@ -11,8 +11,11 @@ export default function AuthCallback() {
     const handleCallback = async () => {
       try {
         // URLからトークンを取得
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+
         if (error) {
           console.error('Error during auth callback:', error);
           router.push('/');

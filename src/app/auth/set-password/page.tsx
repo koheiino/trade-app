@@ -38,15 +38,15 @@ export default function SetPassword() {
 
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validatePassword()) return;
-    
+
     setLoading(true);
     setError('');
 
     try {
       const { error } = await supabase.auth.updateUser({
-        password: password
+        password: password,
       });
 
       if (error) throw error;
@@ -132,7 +132,13 @@ export default function SetPassword() {
               <li className={password.length >= 6 ? 'text-green-600' : ''}>
                 6文字以上
               </li>
-              <li className={password === confirmPassword && password.length > 0 ? 'text-green-600' : ''}>
+              <li
+                className={
+                  password === confirmPassword && password.length > 0
+                    ? 'text-green-600'
+                    : ''
+                }
+              >
                 確認用と一致
               </li>
             </ul>
