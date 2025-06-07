@@ -135,7 +135,13 @@ export default function ImprovedDashboardLayout() {
   );
 }
 
-function Sidebar({ pathname, onClose }) {
+function Sidebar({
+  pathname,
+  onClose,
+}: {
+  pathname: string;
+  onClose?: () => void;
+}) {
   return (
     <div className="h-full flex flex-col bg-white">
       {/* ロゴエリア */}
@@ -215,6 +221,12 @@ function DashboardContent({
   quickAmount,
   setQuickAmount,
   handleQuickTrade,
+}: {
+  quickResult: string;
+  setQuickResult: (value: string) => void;
+  quickAmount: string;
+  setQuickAmount: (value: string) => void;
+  handleQuickTrade: () => void;
 }) {
   return (
     <div className="space-y-8">
@@ -399,6 +411,14 @@ function StatCard({
   value,
   subtitle,
   positive = false,
+}: {
+  icon: React.ElementType;
+  iconColor: string;
+  iconBg: string;
+  title: string;
+  value: string;
+  subtitle: string;
+  positive?: boolean;
 }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
