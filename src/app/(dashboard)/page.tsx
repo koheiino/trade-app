@@ -11,8 +11,11 @@ export default function RootPage() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+
         if (error) {
           console.error('Auth error:', error);
           router.replace('/login');

@@ -21,7 +21,7 @@ import {
   TrendingDown,
   Bell,
   Search,
-  User
+  User,
 } from 'lucide-react';
 
 const navigation = [
@@ -43,7 +43,7 @@ const mockData = {
     { id: 1, date: '2025-06-07', profit: 15000, notes: 'USD/JPY ロング' },
     { id: 2, date: '2025-06-06', profit: -8000, notes: 'EUR/USD ショート' },
     { id: 3, date: '2025-06-05', profit: 22000, notes: 'GBP/JPY ロング' },
-  ]
+  ],
 };
 
 export default function ImprovedDashboardLayout() {
@@ -54,7 +54,10 @@ export default function ImprovedDashboardLayout() {
 
   const handleQuickTrade = () => {
     // クイックトレード記録の処理
-    console.log('Quick trade recorded:', { result: quickResult, amount: quickAmount });
+    console.log('Quick trade recorded:', {
+      result: quickResult,
+      amount: quickAmount,
+    });
     setQuickResult('');
     setQuickAmount('');
   };
@@ -63,22 +66,21 @@ export default function ImprovedDashboardLayout() {
     <div className="flex gap-6 min-h-screen bg-gray-50">
       {/* モバイルサイドバーオーバーレイ */}
       {sidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-50 lg:hidden bg-black/50 backdrop-blur-sm transition-opacity"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* サイドバー */}
-      <div className={`
+      <div
+        className={`
         fixed inset-y-0 left-0 z-50 w-72 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0 lg:static lg:inset-0
-      `}>
-        <Sidebar 
-          pathname={pathname} 
-          onClose={() => setSidebarOpen(false)}
-        />
+      `}
+      >
+        <Sidebar pathname={pathname} onClose={() => setSidebarOpen(false)} />
       </div>
 
       {/* メインコンテンツエリア */}
@@ -94,11 +96,15 @@ export default function ImprovedDashboardLayout() {
                 <Menu className="w-5 h-5 text-gray-600" />
               </button>
               <div>
-                <h1 className="text-xl font-semibold text-gray-900">ダッシュボード</h1>
-                <p className="text-sm text-gray-500 hidden sm:block">今日も一歩ずつ、着実に成長していきましょう</p>
+                <h1 className="text-xl font-semibold text-gray-900">
+                  ダッシュボード
+                </h1>
+                <p className="text-sm text-gray-500 hidden sm:block">
+                  今日も一歩ずつ、着実に成長していきましょう
+                </p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-3">
               <button className="p-2 rounded-lg hover:bg-gray-100 transition-colors relative">
                 <Bell className="w-5 h-5 text-gray-600" />
@@ -116,7 +122,7 @@ export default function ImprovedDashboardLayout() {
 
         {/* メインコンテンツ */}
         <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-          <DashboardContent 
+          <DashboardContent
             quickResult={quickResult}
             setQuickResult={setQuickResult}
             quickAmount={quickAmount}
@@ -164,13 +170,16 @@ function Sidebar({ pathname, onClose }) {
               onClick={onClose}
               className={`
                 flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group
-                ${isActive 
-                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/25' 
-                  : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                ${
+                  isActive
+                    ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/25'
+                    : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
                 }
               `}
             >
-              <item.icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-gray-700'}`} />
+              <item.icon
+                className={`w-5 h-5 ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-gray-700'}`}
+              />
               <span className="font-medium">{item.name}</span>
               {isActive && <ChevronRight className="w-4 h-4 ml-auto" />}
             </Link>
@@ -185,7 +194,9 @@ function Sidebar({ pathname, onClose }) {
             <span className="text-sm font-semibold text-white">U</span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">user@example.com</p>
+            <p className="text-sm font-medium text-gray-900 truncate">
+              user@example.com
+            </p>
             <p className="text-xs text-gray-500">トレーダー</p>
           </div>
         </div>
@@ -198,12 +209,20 @@ function Sidebar({ pathname, onClose }) {
   );
 }
 
-function DashboardContent({ quickResult, setQuickResult, quickAmount, setQuickAmount, handleQuickTrade }) {
+function DashboardContent({
+  quickResult,
+  setQuickResult,
+  quickAmount,
+  setQuickAmount,
+  handleQuickTrade,
+}) {
   return (
     <div className="space-y-8">
       {/* クイック入力エリア */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 lg:p-8">
-        <h2 className="text-xl font-bold mb-6 text-gray-900">今日のトレード結果</h2>
+        <h2 className="text-xl font-bold mb-6 text-gray-900">
+          今日のトレード結果
+        </h2>
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
             <button
@@ -214,7 +233,9 @@ function DashboardContent({ quickResult, setQuickResult, quickAmount, setQuickAm
                   : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
               }`}
             >
-              <CheckCircle className={`w-8 h-8 mx-auto mb-3 ${quickResult === 'win' ? 'text-green-600' : 'text-gray-400'}`} />
+              <CheckCircle
+                className={`w-8 h-8 mx-auto mb-3 ${quickResult === 'win' ? 'text-green-600' : 'text-gray-400'}`}
+              />
               <span className="block font-semibold text-gray-900">勝ち</span>
             </button>
             <button
@@ -225,7 +246,9 @@ function DashboardContent({ quickResult, setQuickResult, quickAmount, setQuickAm
                   : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
               }`}
             >
-              <XCircle className={`w-8 h-8 mx-auto mb-3 ${quickResult === 'loss' ? 'text-red-600' : 'text-gray-400'}`} />
+              <XCircle
+                className={`w-8 h-8 mx-auto mb-3 ${quickResult === 'loss' ? 'text-red-600' : 'text-gray-400'}`}
+              />
               <span className="block font-semibold text-gray-900">負け</span>
             </button>
           </div>
@@ -325,7 +348,9 @@ function DashboardContent({ quickResult, setQuickResult, quickAmount, setQuickAm
       {/* 最近のアクティビティ */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 lg:p-8">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-gray-900">最近のアクティビティ</h2>
+          <h2 className="text-xl font-bold text-gray-900">
+            最近のアクティビティ
+          </h2>
           <button className="text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors">
             すべて見る →
           </button>
@@ -338,9 +363,11 @@ function DashboardContent({ quickResult, setQuickResult, quickAmount, setQuickAm
               className="flex items-center justify-between p-4 rounded-xl hover:bg-gray-50 transition-colors"
             >
               <div className="flex items-center gap-4">
-                <div className={`w-3 h-3 rounded-full ${
-                  entry.profit > 0 ? 'bg-green-500' : 'bg-red-500'
-                }`} />
+                <div
+                  className={`w-3 h-3 rounded-full ${
+                    entry.profit > 0 ? 'bg-green-500' : 'bg-red-500'
+                  }`}
+                />
                 <div>
                   <p className="font-medium text-gray-900">
                     {new Date(entry.date).toLocaleDateString('ja-JP')}
@@ -348,10 +375,13 @@ function DashboardContent({ quickResult, setQuickResult, quickAmount, setQuickAm
                   <p className="text-sm text-gray-500">{entry.notes}</p>
                 </div>
               </div>
-              <p className={`font-semibold ${
-                entry.profit > 0 ? 'text-green-600' : 'text-red-600'
-              }`}>
-                {entry.profit > 0 ? '+' : ''}¥{Math.abs(entry.profit).toLocaleString()}
+              <p
+                className={`font-semibold ${
+                  entry.profit > 0 ? 'text-green-600' : 'text-red-600'
+                }`}
+              >
+                {entry.profit > 0 ? '+' : ''}¥
+                {Math.abs(entry.profit).toLocaleString()}
               </p>
             </div>
           ))}
@@ -361,7 +391,15 @@ function DashboardContent({ quickResult, setQuickResult, quickAmount, setQuickAm
   );
 }
 
-function StatCard({ icon: Icon, iconColor, iconBg, title, value, subtitle, positive = false }) {
+function StatCard({
+  icon: Icon,
+  iconColor,
+  iconBg,
+  title,
+  value,
+  subtitle,
+  positive = false,
+}) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between mb-4">
@@ -370,7 +408,9 @@ function StatCard({ icon: Icon, iconColor, iconBg, title, value, subtitle, posit
         </div>
         <span className="text-xs text-gray-500 font-medium">{title}</span>
       </div>
-      <p className={`text-2xl font-bold mb-1 ${positive ? 'text-green-600' : 'text-gray-900'}`}>
+      <p
+        className={`text-2xl font-bold mb-1 ${positive ? 'text-green-600' : 'text-gray-900'}`}
+      >
         {value}
       </p>
       <p className="text-sm text-gray-600">{subtitle}</p>
