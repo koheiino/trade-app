@@ -11,8 +11,11 @@ export default function AuthCallback() {
     const handleCallback = async () => {
       try {
         // URLからトークンを取得
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+
         if (error) {
           console.error('Error during auth callback:', error);
           router.push('/');
@@ -38,7 +41,7 @@ export default function AuthCallback() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-neutral-50">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900 mx-auto mb-4"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900 mx-auto mb-4" />
         <p className="text-neutral-600">認証中...</p>
       </div>
     </div>
