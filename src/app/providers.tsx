@@ -10,14 +10,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // データの再フェッチ間隔
-            staleTime: 60 * 1000, // 1分
-            // キャッシュ保持時間
-            cacheTime: 5 * 60 * 1000, // 5分
-            // ウィンドウフォーカス時の再フェッチを無効化
-            refetchOnWindowFocus: false,
-            // リトライ設定
-            retry: 1,
+            staleTime: 60 * 1000, // データの再フェッチ間隔
+            refetchOnWindowFocus: false, // ウィンドウフォーカス時の再フェッチ無効
+            retry: 1, // 失敗時のリトライ回数
           },
         },
       }),
@@ -26,7 +21,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       {children}
-      <ReactQueryDevtools initialIsOpen={false} />
+      {process.env.NODE_ENV === 'development' && (
+        <ReactQueryDevtools initialIsOpen={false} />
+      )}
     </QueryClientProvider>
   );
 }
