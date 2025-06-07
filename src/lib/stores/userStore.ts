@@ -99,9 +99,13 @@ export const useUserStore = create<UserStore>()(
             set({ userStats: stats });
           }
         } catch (error: unknown) {
-          set({ error: error.message });
-        } finally {
-          set({ loading: false });
+          if (error instanceof Error) {
+            set({ error: error.message });
+          } else {
+            set({
+              error: 'ユーザーデータの取得中に不明なエラーが発生しました',
+            });
+          }
         }
       },
 
@@ -121,7 +125,13 @@ export const useUserStore = create<UserStore>()(
           if (error) throw error;
           set({ userStats: data });
         } catch (error: unknown) {
-          set({ error: error.message });
+          if (error instanceof Error) {
+            set({ error: error.message });
+          } else {
+            set({
+              error: 'ユーザーステータス更新時に不明なエラーが発生しました',
+            });
+          }
           throw error;
         }
       },
@@ -172,7 +182,14 @@ export const useUserStore = create<UserStore>()(
           set({ user: null, userStats: null, loading: false });
           return true;
         } catch (error: unknown) {
-          set({ error: error.message, loading: false });
+          if (error instanceof Error) {
+            set({ error: error.message, loading: false });
+          } else {
+            set({
+              error: 'アカウント削除中に不明なエラーが発生しました',
+              loading: false,
+            });
+          }
           return false;
         }
       },
