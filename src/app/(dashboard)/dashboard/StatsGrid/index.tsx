@@ -1,6 +1,6 @@
 import { DollarSign, TrendingUp, Calendar, Activity } from 'lucide-react';
 import StatCard from '@/components/ui/StatCard';
-import type { DashboardData } from '../../../types/dashboard';
+import type { DashboardData } from '../../../../types/dashboard';
 
 interface StatsGridProps {
   data: DashboardData;

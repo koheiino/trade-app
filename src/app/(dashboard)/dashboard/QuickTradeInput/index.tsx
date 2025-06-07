@@ -1,5 +1,5 @@
 import { CheckCircle, XCircle } from 'lucide-react';
-import { useQuickTrade } from '../../../hooks/useQuickTrade';
+import { useQuickTrade } from '../../../../hooks/useQuickTrade';
 
 export default function QuickTradeInput() {
   const {

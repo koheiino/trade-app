@@ -198,19 +198,19 @@ export default function RegisterPage() {
               </ol>
             </div>
 
-            <div className="space-y-3">
+            <div className="flex flex-col gap-2 space-y-3">
               <button
-                type="submit"
+                type="button"
                 onClick={handleResendEmail}
                 disabled={loading}
-                className="w-full py-2 text-neutral-700 font-medium hover:text-neutral-900 transition-colors disabled:opacity-50"
+                className="w-full py-3 bg-neutral-400 text-white font-medium rounded-lg hover:bg-neutral-600 transition-colors disabled:opacity-50"
               >
                 {loading ? '送信中...' : 'メールを再送信'}
               </button>
 
               <Link
                 href="/login"
-                className="block w-full py-2 text-center text-neutral-600 hover:text-neutral-900 transition-colors"
+                className="w-full py-3 bg-neutral-400 text-white text-center font-medium rounded-lg hover:bg-neutral-600 transition-colors disabled:opacity-50"
               >
                 ログインページに戻る
               </Link>
