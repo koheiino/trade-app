@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Lock, CheckCircle, AlertCircle } from 'lucide-react';
+import type { User } from '@supabase/supabase-js';
 
 export default function SetPassword() {
   const router = useRouter();
@@ -11,7 +12,7 @@ export default function SetPassword() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     // 現在のユーザーを確認
@@ -38,23 +39,27 @@ export default function SetPassword() {
 
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validatePassword()) return;
-    
+
     setLoading(true);
     setError('');
 
     try {
       const { error } = await supabase.auth.updateUser({
-        password: password
+        password: password,
       });
 
       if (error) throw error;
 
       // パスワード設定成功
       router.push('/');
-    } catch (error: any) {
-      setError(error.message || 'パスワードの設定に失敗しました');
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'パスワードの設定に失敗しました';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -63,7 +68,7 @@ export default function SetPassword() {
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900" />
       </div>
     );
   }
@@ -85,7 +90,10 @@ export default function SetPassword() {
 
         <form onSubmit={handleSetPassword} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-neutral-700 mb-2"
+            >
               パスワード
             </label>
             <div className="relative">
@@ -103,7 +111,10 @@ export default function SetPassword() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-neutral-700 mb-2"
+            >
               パスワード（確認）
             </label>
             <div className="relative">
@@ -132,7 +143,13 @@ export default function SetPassword() {
               <li className={password.length >= 6 ? 'text-green-600' : ''}>
                 6文字以上
               </li>
-              <li className={password === confirmPassword && password.length > 0 ? 'text-green-600' : ''}>
+              <li
+                className={
+                  password === confirmPassword && password.length > 0
+                    ? 'text-green-600'
+                    : ''
+                }
+              >
                 確認用と一致
               </li>
             </ul>
@@ -144,7 +161,7 @@ export default function SetPassword() {
             className="w-full py-3 bg-neutral-900 text-white font-medium rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mx-auto"></div>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mx-auto" />
             ) : (
               'パスワードを設定して開始'
             )}
