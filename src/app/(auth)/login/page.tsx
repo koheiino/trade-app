@@ -1,9 +1,9 @@
 'use client';
 
+import { Mail, Lock, ArrowRight, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,8 +28,17 @@ export default function LoginPage() {
       if (error) throw error;
 
       router.push('/');
-    } catch (error: any) {
-      setError(error.message || 'ログインに失敗しました');
+    } catch (error: unknown) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'message' in error &&
+        typeof (error as { message?: string }).message === 'string'
+      ) {
+        setError((error as { message: string }).message);
+      } else {
+        setError('ログインに失敗しました');
+      }
     } finally {
       setLoading(false);
     }
@@ -46,7 +56,10 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-neutral-700 mb-2"
+            >
               メールアドレス
             </label>
             <div className="relative">
@@ -63,19 +76,35 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-neutral-700 mb-2"
+            >
               パスワード
             </label>
             <div className="relative">
               <Lock className="absolute left-3 top-3 w-5 h-5 text-neutral-400" />
               <input
-                type="password"
+                id="password"
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-10 pr-4 py-3 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
+                className="w-full pl-10 pr-12 py-3 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
                 required
               />
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-3 p-1 text-neutral-400 hover:text-neutral-700"
+              >
+                {showPassword ? (
+                  <EyeOff className="w-5 h-5" />
+                ) : (
+                  <Eye className="w-5 h-5" />
+                )}
+              </button>
             </div>
           </div>
 
@@ -92,7 +121,7 @@ export default function LoginPage() {
             className="w-full py-3 bg-neutral-900 text-white font-medium rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {loading ? (
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
             ) : (
               <>
                 ログイン

@@ -65,7 +65,7 @@ export default function DashboardLayout({
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900" />
       </div>
     );
   }
@@ -85,6 +85,14 @@ export default function DashboardLayout({
         <div
           className="fixed inset-0 bg-neutral-900/50"
           onClick={() => setSidebarOpen(false)}
+          tabIndex={0}
+          role="button"
+          aria-label="サイドバーを閉じる"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              setSidebarOpen(false);
+            }
+          }}
         />
         <div className="fixed inset-y-0 left-0 w-64 bg-white shadow-xl">
           <Sidebar
@@ -110,6 +118,7 @@ export default function DashboardLayout({
               FX Trading Diary
             </h1>
             <button
+              type="button"
               onClick={() => setSidebarOpen(true)}
               className="p-2 rounded-lg hover:bg-neutral-100 transition-colors"
             >
@@ -143,6 +152,7 @@ function Sidebar({
         <h1 className="text-xl font-bold text-neutral-900">FX Trading</h1>
         {onClose && (
           <button
+            type="button"
             onClick={onClose}
             className="lg:hidden p-2 rounded-lg hover:bg-neutral-100 transition-colors"
           >
@@ -189,6 +199,7 @@ function Sidebar({
           </div>
         </div>
         <button
+          type="submit"
           onClick={onLogout}
           className="flex items-center gap-2 w-full px-3 py-2 text-sm text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"
         >

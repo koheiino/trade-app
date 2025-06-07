@@ -141,7 +141,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900" />
       </div>
     );
   }
@@ -183,17 +183,23 @@ export default function SettingsPage() {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1">
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-neutral-700 mb-1"
+            >
               メールアドレス
             </label>
             <p className="text-neutral-900">{user?.email}</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1">
+            <label
+              htmlFor="createAt"
+              className="block text-sm font-medium text-neutral-700 mb-1"
+            >
               アカウント作成日
             </label>
-            <p className="text-neutral-900">
+            <p id="createAt" className="text-neutral-900">
               {user?.created_at
                 ? new Date(user.created_at).toLocaleDateString('ja-JP')
                 : '-'}
@@ -211,12 +217,16 @@ export default function SettingsPage() {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">
+            <label
+              htmlFor="defaultStartAmount"
+              className="block text-sm font-medium text-neutral-700 mb-2"
+            >
               デフォルト開始金額
             </label>
             <div className="relative">
               <span className="absolute left-3 top-3 text-neutral-500">¥</span>
               <input
+                id="defaultStartAmount"
                 type="number"
                 value={settings.defaultStartAmount}
                 onChange={(e) =>
@@ -234,11 +244,15 @@ export default function SettingsPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">
+            <label
+              htmlFor="riskPercentage"
+              className="block text-sm font-medium text-neutral-700 mb-2"
+            >
               リスク許容度
             </label>
             <div className="relative">
               <input
+                id="riskPercentage"
                 type="number"
                 value={settings.riskPercentage}
                 onChange={(e) =>
@@ -312,10 +326,14 @@ export default function SettingsPage() {
 
           {settings.enableDailyReminder && (
             <div className="ml-4">
-              <label className="block text-sm font-medium text-neutral-700 mb-2">
+              <label
+                htmlFor="reminderTime"
+                className="block text-sm font-medium text-neutral-700 mb-2"
+              >
                 リマインダー時刻
               </label>
               <input
+                id="reminderTime"
                 type="time"
                 value={settings.reminderTime}
                 onChange={(e) =>
@@ -330,6 +348,7 @@ export default function SettingsPage() {
 
       {/* 保存ボタン */}
       <button
+        type="button"
         onClick={handleSaveSettings}
         disabled={saving}
         className="w-full py-3 bg-neutral-900 text-white font-medium rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
@@ -358,6 +377,7 @@ export default function SettingsPage() {
               この操作は取り消すことができません。すべてのデータが永久に削除されます。
             </p>
             <button
+              type="button"
               onClick={() => setShowDeleteModal(true)}
               className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
             >
@@ -384,10 +404,14 @@ export default function SettingsPage() {
             </p>
 
             <div className="mb-6">
-              <label className="block text-sm font-medium text-neutral-700 mb-2">
+              <label
+                htmlFor="deleteConfirm"
+                className="block text-sm font-medium text-neutral-700 mb-2"
+              >
                 確認のため「DELETE」と入力してください
               </label>
               <input
+                id="deleteConfirm"
                 type="text"
                 value={deleteConfirmation}
                 onChange={(e) => setDeleteConfirmation(e.target.value)}
@@ -398,6 +422,7 @@ export default function SettingsPage() {
 
             <div className="flex gap-3">
               <button
+                type="button"
                 onClick={() => {
                   setShowDeleteModal(false);
                   setDeleteConfirmation('');
@@ -407,6 +432,7 @@ export default function SettingsPage() {
                 キャンセル
               </button>
               <button
+                type="button"
                 onClick={handleDeleteAccount}
                 disabled={deleteConfirmation !== 'DELETE'}
                 className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"

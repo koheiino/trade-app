@@ -40,12 +40,14 @@ export default function RegisterPage() {
         type: 'success',
         text: '確認メールを送信しました。メールをご確認ください。',
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error occurred';
       setMessage({
         type: 'error',
-        text: error.message.includes('Email rate limit exceeded')
+        text: errorMessage.includes('Email rate limit exceeded')
           ? 'メール送信の制限に達しました。しばらく待ってから再度お試しください。'
-          : error.message || '登録に失敗しました',
+          : errorMessage || '登録に失敗しました',
       });
     } finally {
       setLoading(false);
@@ -73,7 +75,9 @@ export default function RegisterPage() {
         type: 'success',
         text: '確認メールを再送信しました。',
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error occurred';
       setMessage({
         type: 'error',
         text: '再送信に失敗しました。しばらく待ってから再度お試しください。',
@@ -99,12 +103,16 @@ export default function RegisterPage() {
 
             <form onSubmit={handleRegister} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-medium text-neutral-700 mb-2"
+                >
                   メールアドレス
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 w-5 h-5 text-neutral-400" />
                   <input
+                    id="email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -141,7 +149,7 @@ export default function RegisterPage() {
                 className="w-full py-3 bg-neutral-900 text-white font-medium rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading ? (
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
                 ) : (
                   <>
                     確認メールを送信
@@ -192,6 +200,7 @@ export default function RegisterPage() {
 
             <div className="space-y-3">
               <button
+                type="submit"
                 onClick={handleResendEmail}
                 disabled={loading}
                 className="w-full py-2 text-neutral-700 font-medium hover:text-neutral-900 transition-colors disabled:opacity-50"

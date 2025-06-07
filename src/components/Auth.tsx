@@ -31,8 +31,12 @@ export default function Auth() {
         if (error) throw error;
         setMessage('確認メールを送信しました！');
       }
-    } catch (error: any) {
-      setMessage(error.message);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setMessage(error.message);
+      } else {
+        setMessage('不明なエラーが発生しました');
+      }
     } finally {
       setLoading(false);
     }
@@ -86,6 +90,7 @@ export default function Auth() {
         </form>
 
         <button
+          type="button"
           onClick={() => setIsLogin(!isLogin)}
           className="w-full mt-4 text-center text-sm text-gray-600 hover:text-purple-600"
         >

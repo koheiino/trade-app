@@ -221,7 +221,7 @@ export default function RecordsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900" />
       </div>
     );
   }
@@ -315,6 +315,7 @@ export default function RecordsPage() {
                   />
                 </div>
                 <button
+                  type="button"
                   onClick={() => deleteTrade(trade.id)}
                   className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                 >
@@ -325,6 +326,7 @@ export default function RecordsPage() {
           ))}
 
           <button
+            type="button"
             onClick={addTrade}
             className="w-full py-3 bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-colors font-medium flex items-center justify-center gap-2"
           >
@@ -363,12 +365,14 @@ export default function RecordsPage() {
       {/* 保存ボタン */}
       <div className="flex gap-4">
         <button
+          type="button"
           onClick={() => router.push('/')}
           className="flex-1 py-3 border border-neutral-200 text-neutral-700 font-medium rounded-xl hover:bg-neutral-50 transition-colors"
         >
           キャンセル
         </button>
         <button
+          type="button"
           onClick={saveDailyEntry}
           disabled={saving}
           className="flex-1 py-3 bg-neutral-900 text-white font-medium rounded-xl hover:bg-neutral-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
