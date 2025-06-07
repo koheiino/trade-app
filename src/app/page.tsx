@@ -9,12 +9,13 @@ import {
   Target,
   Sparkles,
   Heart,
-  RefreshCw,
   LineChart,
   BarChart as BarChartIcon,
   LogOut,
   Mail,
   Lock,
+  ArrowRight,
+  AlertCircle,
 } from 'lucide-react';
 import {
   LineChart as RechartsLineChart,
@@ -57,8 +58,8 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900"></div>
       </div>
     );
   }
@@ -73,6 +74,7 @@ function Auth() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState<'success' | 'error'>('error');
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,75 +89,109 @@ function Auth() {
         });
         if (error) throw error;
       } else {
-        const { error } = await supabase.auth.signUp({
+        // 新規登録の場合はマジックリンクを送信
+        const { error } = await supabase.auth.signInWithOtp({
           email,
-          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+          },
         });
         if (error) throw error;
-        setMessage('確認メールを送信しました！');
+        setMessageType('success');
+        setMessage('確認メールを送信しました。メールをご確認ください。');
       }
     } catch (error: any) {
-      setMessage(error.message);
+      setMessageType('error');
+      if (error.message.includes('Email rate limit exceeded')) {
+        setMessage('メール送信の制限に達しました。しばらく待ってから再度お試しください。');
+      } else {
+        setMessage(error.message);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
-        <h2 className="text-3xl font-bold text-center mb-8 bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-          FXトレード成長日記
+    <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+      <div className="bg-white p-8 rounded-xl shadow-sm border border-neutral-200 w-full max-w-md">
+        <h2 className="text-2xl font-bold text-center mb-8 text-neutral-900">
+          FX Trading Diary
         </h2>
 
-        <form onSubmit={handleAuth} className="space-y-6">
+        <form onSubmit={handleAuth} className="space-y-4">
           <div className="relative">
-            <Mail className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+            <Mail className="absolute left-3 top-3 w-5 h-5 text-neutral-400" />
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="メールアドレス"
-              className="w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full pl-10 pr-4 py-3 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
               required
             />
           </div>
 
-          <div className="relative">
-            <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="パスワード"
-              className="w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-              required
-            />
-          </div>
+          {isLogin && (
+            <div className="relative">
+              <Lock className="absolute left-3 top-3 w-5 h-5 text-neutral-400" />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="パスワード"
+                className="w-full pl-10 pr-4 py-3 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
+                required
+              />
+            </div>
+          )}
 
           {message && (
-            <div className="p-3 rounded-lg bg-blue-50 text-blue-700 text-sm">
-              {message}
+            <div className={`p-3 rounded-lg flex items-center gap-2 ${
+              messageType === 'success' 
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                : 'bg-red-50 text-red-700 border border-red-200'
+            }`}>
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span className="text-sm">{message}</span>
             </div>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold rounded-lg hover:shadow-lg transform hover:scale-105 transition disabled:opacity-50"
+            className="w-full py-3 bg-neutral-900 text-white font-medium rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {loading ? '処理中...' : isLogin ? 'ログイン' : '新規登録'}
+            {loading ? (
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+            ) : (
+              <>
+                {isLogin ? 'ログイン' : '確認メールを送信'}
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
           </button>
         </form>
 
         <button
           onClick={() => setIsLogin(!isLogin)}
-          className="w-full mt-4 text-center text-sm text-gray-600 hover:text-purple-600"
+          className="w-full mt-4 text-center text-sm text-neutral-600 hover:text-neutral-900 transition-colors"
         >
           {isLogin
             ? 'アカウントをお持ちでない方はこちら'
             : 'すでにアカウントをお持ちの方はこちら'}
         </button>
+
+        {!isLogin && (
+          <div className="mt-6 p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+            <p className="text-sm text-neutral-600">
+              <span className="font-medium">新規登録の流れ：</span><br />
+              1. メールアドレスを入力して送信<br />
+              2. 確認メールのリンクをクリック<br />
+              3. パスワードを設定して完了
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -186,46 +222,11 @@ function TradingDiary({ user }: { user: User }) {
 
   // フェーズ設定
   const phases = [
-    {
-      phase: 1,
-      range: '5K-20K',
-      target: 20000,
-      riskPercent: 7,
-      maxRisk: 400,
-      color: 'bg-blue-500',
-    },
-    {
-      phase: 2,
-      range: '20K-50K',
-      target: 50000,
-      riskPercent: 6,
-      maxRisk: 800,
-      color: 'bg-green-500',
-    },
-    {
-      phase: 3,
-      range: '50K-150K',
-      target: 150000,
-      riskPercent: 5,
-      maxRisk: 1500,
-      color: 'bg-purple-500',
-    },
-    {
-      phase: 4,
-      range: '150K-500K',
-      target: 500000,
-      riskPercent: 4,
-      maxRisk: 3000,
-      color: 'bg-orange-500',
-    },
-    {
-      phase: 5,
-      range: '500K-1M',
-      target: 1000000,
-      riskPercent: 3,
-      maxRisk: 5000,
-      color: 'bg-red-500',
-    },
+    { phase: 1, range: '5K-20K', target: 20000, riskPercent: 7, maxRisk: 400 },
+    { phase: 2, range: '20K-50K', target: 50000, riskPercent: 6, maxRisk: 800 },
+    { phase: 3, range: '50K-150K', target: 150000, riskPercent: 5, maxRisk: 1500 },
+    { phase: 4, range: '150K-500K', target: 500000, riskPercent: 4, maxRisk: 3000 },
+    { phase: 5, range: '500K-1M', target: 1000000, riskPercent: 3, maxRisk: 5000 },
   ];
 
   const currentPhaseData = phases[currentPhase - 1];
@@ -237,11 +238,11 @@ function TradingDiary({ user }: { user: User }) {
 
   // 励ましのメッセージ
   const motivationalMessages = [
-    '今日も一歩前進！素晴らしい継続力です✨',
-    'コツコツが勝つコツ！今日も頑張りました🎯',
-    '積み重ねが未来を作る！明日も楽しみですね🌟',
-    '着実な成長が見えています！この調子で💪',
-    '今日の努力は明日の自信に！お疲れ様でした🌸',
+    '今日も一歩前進。継続は力なり。',
+    'コツコツが勝つコツ。今日も頑張りました。',
+    '積み重ねが未来を作る。明日も楽しみですね。',
+    '着実な成長が見えています。この調子で。',
+    '今日の努力は明日の自信に。お疲れ様でした。',
   ];
 
   // データ読み込み
@@ -498,23 +499,23 @@ function TradingDiary({ user }: { user: User }) {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 p-4">
+    <div className="min-h-screen bg-neutral-50 p-4">
       <div className="max-w-4xl mx-auto">
         {/* ヘッダー */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <div className="flex justify-between items-start mb-4">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-              FXトレード成長日記 🌱
+        <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-6">
+          <div className="flex justify-between items-start mb-6">
+            <h1 className="text-2xl font-bold text-neutral-900">
+              FX Trading Diary
             </h1>
             <button
               onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition"
+              className="flex items-center gap-2 px-4 py-2 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 rounded-lg transition-colors"
             >
               <LogOut className="w-4 h-4" />
               ログアウト
@@ -522,39 +523,37 @@ function TradingDiary({ user }: { user: User }) {
           </div>
 
           {/* 継続日数 */}
-          <div className="text-center mb-4">
-            <div className="inline-flex items-center gap-2 bg-yellow-100 px-4 py-2 rounded-full">
-              <Sparkles className="w-5 h-5 text-yellow-600" />
-              <span className="font-bold text-yellow-700">
-                {streakDays}日連続継続中！
+          <div className="text-center mb-6">
+            <div className="inline-flex items-center gap-2 bg-neutral-100 px-4 py-2 rounded-full">
+              <Sparkles className="w-5 h-5 text-neutral-700" />
+              <span className="font-medium text-neutral-700">
+                {streakDays}日連続継続中
               </span>
             </div>
           </div>
 
           {/* 資金状況 */}
           <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-xl">
-              <p className="text-sm opacity-90">現在の資金</p>
+            <div className="bg-neutral-900 text-white p-4 rounded-lg">
+              <p className="text-sm opacity-70 mb-1">現在の資金</p>
               <p className="text-2xl font-bold">¥{balance.toLocaleString()}</p>
             </div>
-            <div
-              className={`${currentPhaseData.color} text-white p-4 rounded-xl`}
-            >
-              <p className="text-sm opacity-90">現在のフェーズ</p>
+            <div className="bg-white border-2 border-neutral-900 text-neutral-900 p-4 rounded-lg">
+              <p className="text-sm mb-1">現在のフェーズ</p>
               <p className="text-2xl font-bold">Phase {currentPhase}</p>
-              <p className="text-xs opacity-80">{currentPhaseData.range}</p>
+              <p className="text-xs text-neutral-600">{currentPhaseData.range}</p>
             </div>
           </div>
 
           {/* 進捗バー */}
-          <div className="mb-4">
-            <div className="flex justify-between text-sm text-gray-600 mb-1">
+          <div>
+            <div className="flex justify-between text-sm text-neutral-600 mb-2">
               <span>目標: ¥{currentPhaseData.target.toLocaleString()}</span>
               <span>{Math.min(progressPercent, 100).toFixed(1)}%</span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+            <div className="w-full bg-neutral-200 rounded-full h-2 overflow-hidden">
               <div
-                className={`h-full ${currentPhaseData.color} transition-all duration-500`}
+                className="h-full bg-neutral-900 transition-all duration-500"
                 style={{ width: `${Math.min(progressPercent, 100)}%` }}
               />
             </div>
@@ -562,66 +561,51 @@ function TradingDiary({ user }: { user: User }) {
         </div>
 
         {/* 今日のチェックリスト */}
-        <div className="bg-white text-[#333]  rounded-2xl shadow-lg p-6 mb-6">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <CheckCircle2 className="w-6 h-6 text-green-500" />
+        <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-6">
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5" />
             今日のチェックリスト
           </h2>
           <div className="grid grid-cols-2 gap-3">
-            <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition">
-              <input
-                type="checkbox"
-                checked={todayEntry.checklist.morning}
-                onChange={() => updateChecklist('morning')}
-                className="w-5 h-5 text-blue-600"
-              />
-              <span>朝のルーティン完了</span>
-            </label>
-            <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition">
-              <input
-                type="checkbox"
-                checked={todayEntry.checklist.analysis}
-                onChange={() => updateChecklist('analysis')}
-                className="w-5 h-5 text-blue-600"
-              />
-              <span>チャート分析実施</span>
-            </label>
-            <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition">
-              <input
-                type="checkbox"
-                checked={todayEntry.checklist.rules}
-                onChange={() => updateChecklist('rules')}
-                className="w-5 h-5 text-blue-600"
-              />
-              <span>ルール遵守</span>
-            </label>
-            <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition">
-              <input
-                type="checkbox"
-                checked={todayEntry.checklist.mental}
-                onChange={() => updateChecklist('mental')}
-                className="w-5 h-5 text-blue-600"
-              />
-              <span>メンタル管理OK</span>
-            </label>
+            {Object.entries({
+              morning: '朝のルーティン完了',
+              analysis: 'チャート分析実施',
+              rules: 'ルール遵守',
+              mental: 'メンタル管理OK',
+            }).map(([key, label]) => (
+              <label
+                key={key}
+                className="flex items-center gap-3 p-3 bg-neutral-50 rounded-lg cursor-pointer hover:bg-neutral-100 transition-colors"
+              >
+                <input
+                  type="checkbox"
+                  checked={todayEntry.checklist[key as keyof typeof todayEntry.checklist]}
+                  onChange={() => updateChecklist(key as keyof typeof todayEntry.checklist)}
+                  className="w-5 h-5 accent-neutral-900"
+                />
+                <span className="text-neutral-700">{label}</span>
+              </label>
+            ))}
           </div>
         </div>
 
         {/* トレード記録 */}
-        <div className="bg-white text-[#333] rounded-2xl shadow-lg p-6 mb-6">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <TrendingUp className="w-6 h-6 text-purple-500" />
+        <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-6">
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5" />
             今日のトレード記録
           </h2>
 
           {todayEntry.trades.map((trade, index) => (
-            <div key={trade.id} className="mb-4 p-4 bg-gray-50 rounded-lg">
+            <div key={trade.id} className="mb-4 p-4 bg-neutral-50 rounded-lg">
               <div className="flex items-center gap-4 mb-2">
-                <span className="font-semibold">トレード {index + 1}</span>
+                <span className="font-medium text-neutral-700">
+                  トレード {index + 1}
+                </span>
                 <input
                   type="number"
                   placeholder="損益（円）"
-                  className="flex-1 p-2 border rounded-lg"
+                  className="flex-1 p-2 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent"
                   value={trade.result}
                   onChange={(e) =>
                     updateTrade(trade.id, 'result', e.target.value)
@@ -631,7 +615,7 @@ function TradingDiary({ user }: { user: User }) {
               <input
                 type="text"
                 placeholder="メモ（パターン、反省点など）"
-                className="w-full p-2 border rounded-lg"
+                className="w-full p-2 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent"
                 value={trade.notes}
                 onChange={(e) => updateTrade(trade.id, 'notes', e.target.value)}
               />
@@ -640,14 +624,14 @@ function TradingDiary({ user }: { user: User }) {
 
           <button
             onClick={addTrade}
-            className="w-full py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition"
+            className="w-full py-2 bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-colors font-medium"
           >
             + トレード追加
           </button>
 
           {todayEntry.trades.length > 0 && (
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-              <p className="text-lg font-semibold text-blue-700">
+            <div className="mt-4 p-3 bg-neutral-900 text-white rounded-lg">
+              <p className="text-lg font-medium">
                 本日の損益: ¥{calculateDailyProfit().toLocaleString()}
               </p>
             </div>
@@ -655,13 +639,13 @@ function TradingDiary({ user }: { user: User }) {
         </div>
 
         {/* 今日の振り返り */}
-        <div className="bg-white text-[#333] rounded-2xl shadow-lg p-6 mb-6">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <Heart className="w-6 h-6 text-pink-500" />
+        <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-6">
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+            <Heart className="w-5 h-5" />
             今日の振り返り
           </h2>
           <textarea
-            className="w-full p-3 border rounded-lg h-32"
+            className="w-full p-3 border border-neutral-200 rounded-lg h-32 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent resize-none"
             placeholder="今日の気づき、明日への意気込みなど..."
             value={todayEntry.notes}
             onChange={(e) =>
@@ -673,15 +657,15 @@ function TradingDiary({ user }: { user: User }) {
         {/* 保存ボタン */}
         <button
           onClick={saveDailyEntry}
-          className="w-full py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold rounded-xl hover:shadow-lg transform hover:scale-105 transition"
+          className="w-full py-4 bg-neutral-900 text-white font-medium rounded-xl hover:bg-neutral-800 transition-colors"
         >
-          今日の記録を保存 ✨
+          今日の記録を保存
         </button>
 
         {/* モチベーションメッセージ */}
         {todayEntry.trades.length > 0 && (
-          <div className="mt-6 p-4 bg-gradient-to-r from-yellow-100 to-orange-100 rounded-xl text-center">
-            <p className="text-lg font-semibold text-orange-800">
+          <div className="mt-6 p-4 bg-neutral-100 rounded-xl text-center">
+            <p className="text-neutral-700">
               {
                 motivationalMessages[
                   Math.floor(Math.random() * motivationalMessages.length)
@@ -695,10 +679,10 @@ function TradingDiary({ user }: { user: User }) {
         {history.length > 0 && (
           <button
             onClick={() => setShowStats(!showStats)}
-            className="w-full mt-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold rounded-xl hover:shadow-lg transform hover:scale-105 transition flex items-center justify-center gap-2"
+            className="w-full mt-6 py-3 bg-white border-2 border-neutral-900 text-neutral-900 font-medium rounded-xl hover:bg-neutral-50 transition-colors flex items-center justify-center gap-2"
           >
             <LineChart className="w-5 h-5" />
-            {showStats ? '統計を閉じる' : '成長グラフを見る 📊'}
+            {showStats ? '統計を閉じる' : '成長グラフを見る'}
           </button>
         )}
 
@@ -706,9 +690,9 @@ function TradingDiary({ user }: { user: User }) {
         {showStats && history.length > 0 && (
           <div className="mt-6 space-y-6">
             {/* 資金推移グラフ */}
-            <div className="bg-white text-[#333] rounded-2xl shadow-lg p-6">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <TrendingUp className="w-6 h-6 text-blue-500" />
+            <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" />
                 資金推移グラフ
               </h3>
               <ResponsiveContainer width="100%" height={300}>
@@ -721,38 +705,29 @@ function TradingDiary({ user }: { user: User }) {
                       x2="0"
                       y2="1"
                     >
-                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8} />
+                      <stop offset="5%" stopColor="#171717" stopOpacity={0.8} />
                       <stop
                         offset="95%"
-                        stopColor="#8b5cf6"
+                        stopColor="#171717"
                         stopOpacity={0.1}
                       />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="day" />
-                  <YAxis />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                  <XAxis dataKey="day" stroke="#737373" />
+                  <YAxis stroke="#737373" />
                   <Tooltip
-                    content={({ active, payload }) => {
-                      if (active && payload && payload[0]) {
-                        return (
-                          <div className="bg-white p-3 rounded-lg shadow-lg border">
-                            <p className="text-sm text-gray-600">
-                              {payload[0].payload.date}
-                            </p>
-                            <p className="font-bold">
-                              ¥{payload[0].value?.toLocaleString()}
-                            </p>
-                          </div>
-                        );
-                      }
-                      return null;
+                    contentStyle={{
+                      backgroundColor: 'white',
+                      border: '1px solid #e5e5e5',
+                      borderRadius: '8px',
                     }}
+                    labelStyle={{ color: '#171717' }}
                   />
                   <Area
                     type="monotone"
                     dataKey="balance"
-                    stroke="#8b5cf6"
+                    stroke="#171717"
                     fillOpacity={1}
                     fill="url(#colorBalance)"
                   />
@@ -761,35 +736,23 @@ function TradingDiary({ user }: { user: User }) {
             </div>
 
             {/* 日別損益グラフ */}
-            <div className="bg-white text-[#333] rounded-2xl shadow-lg p-6">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <BarChartIcon className="w-6 h-6 text-green-500" />
+            <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                <BarChartIcon className="w-5 h-5" />
                 日別損益
               </h3>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="day" />
-                  <YAxis />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                  <XAxis dataKey="day" stroke="#737373" />
+                  <YAxis stroke="#737373" />
                   <Tooltip
-                    content={({ active, payload }) => {
-                      if (active && payload && payload[0]) {
-                        const value = (payload[0].value as number) ?? 0;
-                        return (
-                          <div className="bg-white p-3 rounded-lg shadow-lg border">
-                            <p className="text-sm text-gray-600">
-                              {payload[0].payload.date}
-                            </p>
-                            <p
-                              className={`font-bold ${value >= 0 ? 'text-green-600' : 'text-red-600'}`}
-                            >
-                              {value >= 0 ? '+' : ''}¥{value.toLocaleString()}
-                            </p>
-                          </div>
-                        );
-                      }
-                      return null;
+                    contentStyle={{
+                      backgroundColor: 'white',
+                      border: '1px solid #e5e5e5',
+                      borderRadius: '8px',
                     }}
+                    labelStyle={{ color: '#171717' }}
                   />
                   <Bar
                     dataKey="profit"
@@ -812,9 +775,9 @@ function TradingDiary({ user }: { user: User }) {
             </div>
 
             {/* 勝率円グラフ */}
-            <div className="bg-white text-[#333] rounded-2xl shadow-lg p-6">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <Target className="w-6 h-6 text-purple-500" />
+            <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                <Target className="w-5 h-5" />
                 日別勝率
               </h3>
               <div className="flex items-center justify-around">
@@ -846,7 +809,7 @@ function TradingDiary({ user }: { user: User }) {
                         className={`w-4 h-4 rounded`}
                         style={{ backgroundColor: data.color }}
                       />
-                      <span>
+                      <span className="text-neutral-700">
                         {data.name}: {data.value}日
                       </span>
                     </div>
@@ -856,16 +819,18 @@ function TradingDiary({ user }: { user: User }) {
             </div>
 
             {/* 統計サマリー */}
-            <div className="bg-gradient-to-r from-purple-100 to-blue-100 rounded-2xl p-6">
-              <h3 className="text-xl font-bold mb-4">📊 統計サマリー</h3>
+            <div className="bg-neutral-100 rounded-xl p-6">
+              <h3 className="text-lg font-bold mb-4">統計サマリー</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-gray-600">総取引日数</p>
-                  <p className="text-2xl font-bold">{history.length}日</p>
+                  <p className="text-neutral-600 text-sm">総取引日数</p>
+                  <p className="text-2xl font-bold text-neutral-900">
+                    {history.length}日
+                  </p>
                 </div>
                 <div>
-                  <p className="text-gray-600">平均日次損益</p>
-                  <p className="text-2xl font-bold">
+                  <p className="text-neutral-600 text-sm">平均日次損益</p>
+                  <p className="text-2xl font-bold text-neutral-900">
                     ¥
                     {history.length > 0
                       ? Math.round(
@@ -878,7 +843,7 @@ function TradingDiary({ user }: { user: User }) {
                   </p>
                 </div>
                 <div>
-                  <p className="text-gray-600">最大利益</p>
+                  <p className="text-neutral-600 text-sm">最大利益</p>
                   <p className="text-2xl font-bold text-green-600">
                     +¥
                     {Math.max(
@@ -888,7 +853,7 @@ function TradingDiary({ user }: { user: User }) {
                   </p>
                 </div>
                 <div>
-                  <p className="text-gray-600">最大損失</p>
+                  <p className="text-neutral-600 text-sm">最大損失</p>
                   <p className="text-2xl font-bold text-red-600">
                     ¥
                     {Math.min(
@@ -905,13 +870,13 @@ function TradingDiary({ user }: { user: User }) {
         {/* フェーズアップ祝い */}
         {showCelebration && (
           <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-            <div className="bg-white p-8 rounded-2xl shadow-2xl animate-bounce">
-              <Award className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+            <div className="bg-white p-8 rounded-xl shadow-2xl animate-bounce">
+              <Award className="w-16 h-16 text-neutral-900 mx-auto mb-4" />
               <h3 className="text-2xl font-bold text-center mb-2">
-                Phase {currentPhase} 到達おめでとう！🎉
+                Phase {currentPhase} 到達おめでとう！
               </h3>
-              <p className="text-center text-gray-600">
-                着実な成長が素晴らしいです！
+              <p className="text-center text-neutral-600">
+                着実な成長が素晴らしいです
               </p>
             </div>
           </div>
