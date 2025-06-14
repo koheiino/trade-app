@@ -114,7 +114,12 @@ datetime lastDayCheck = 0;
 struct TradeStats {
     int totalTrades;
     int winTrades;
-    double totalRR;
+    double totalWinAmount;    // 追加：総利益
+    double totalLossAmount;   // 追加：総損失
+    double avgWinAmount;      // 追加：平均利益
+    double avgLossAmount;     // 追加：平均損失
+    double profitFactor;      // 追加：プロフィットファクター
+    double realRRR;           // 追加：実績RRR（平均利益÷平均損失）
     double weeklyProfit;
     double monthlyProfit;
 };
@@ -126,6 +131,58 @@ string tpPipsEditName = "PC_EditTPPips";
 string riskAmountEditName = "PC_EditRiskAmount";
 string riskPercentEditName = "PC_EditRiskPercent";
 
+struct TradeScore {
+    // A. 収益性スコア（300点）
+    double winRateScore;        // 勝率スコア (0-100)
+    double rrScore;             // RR比スコア (0-100)
+    double expectancyScore;     // 期待値スコア (0-100)
+    
+    // B. リスク管理スコア（300点）
+    double ruleComplianceScore; // ルール遵守スコア (0-100)
+    double drawdownScore;       // ドローダウン管理スコア (0-100)
+    double moneyManageScore;    // 資金管理スコア (0-100)
+    
+    // C. 一貫性スコア（100点）
+    double consistencyScore;    // 成績安定性スコア (0-100)
+    
+    // D. 成長スコア（200点）
+    double skillScore;          // スキル向上スコア (0-100)
+    double progressScore;       // フェーズ進捗スコア (0-100)
+    
+    // ボーナス・ペナルティ
+    double bonusPoints;         // ボーナスポイント
+    double penaltyPoints;       // ペナルティポイント
+    
+    // 総合スコア
+    double totalScore;          // 総合スコア（1000点満点）
+    string rank;                // ランク（S+～C）
+    
+    // 履歴データ（トレンド分析用）
+    double prevWeekScore;       // 前週スコア
+    double prevMonthScore;      // 前月スコア
+    double maxDrawdown;         // 最大ドローダウン
+    int ruleViolations;         // ルール違反回数
+    int consecutiveLosses;      // 連敗数
+    double lastLotSize;         // 前回のロットサイズ
+};
+TradeScore tradeScore;
+
+// 統計管理用の追加変数
+double weeklyScores[];          // 週次スコア履歴
+double monthlyWinRates[];       // 月次勝率履歴
+double monthlyRRRs[];           // 月次RRR履歴
+int totalTradesThisWeek = 0;
+int totalTradesThisMonth = 0;
+
+color bgColor = C'25,27,30';
+color sectionBg = C'35,37,40';
+color headerBg = C'45,55,72';
+color textColor = C'220,220,220';
+color labelColor = C'160,160,160';
+color greenColor = C'76,175,80';
+color redColor = C'244,67,54';
+color blueColor = C'33,150,243';
+color orangeColor = C'255,152,0';
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
@@ -215,26 +272,17 @@ void CreateEnhancedPanel()
     int y = PanelPosY;
     int width = 850;
     int lineHeight = 55;      // 50 → 55
-    int sectionGap = 40;      // 30 → 40（セクション間の余白を増加）
-    int padding = 25;
-    
-       color bgColor = C'25,27,30';
-    color sectionBg = C'35,37,40';
-    color headerBg = C'45,55,72';
-    color textColor = C'220,220,220';
-    color labelColor = C'160,160,160';
-    color greenColor = C'76,175,80';
-    color redColor = C'244,67,54';
-    color blueColor = C'33,150,243';
-    color orangeColor = C'255,152,0';
+    int sectionGap = 35;      // 30 → 40（セクション間の余白を増加）
+    int padding = 20;
+
 
     // メイン背景（高さを大幅に増加）
-    CreateRect("PC_MainBg", x, y, width, 1500, bgColor);  // 1250 → 1500
+    CreateRect("PC_MainBg", x, y, width, 1500, bgColor);
     
     // ヘッダー
-    CreateRect("PC_Header", x, y, width, 60, headerBg);   // 50 → 60
-    CreateLabel("PC_Title", x + width/2, y + 20, "MT5 Trade Management System - Pips Version", 
-                16, clrWhite, "Arial Bold", ANCHOR_CENTER);   // y+15 → y+20
+    CreateRect("PC_Header", x, y, width, 60, headerBg);
+    CreateLabel("PC_Title", x + width/2, y + 20, "Management System", 
+                16, clrWhite, "Arial Bold", ANCHOR_CENTER);
     
     y += 70;  // 65 → 70
     
@@ -256,7 +304,7 @@ void CreateEnhancedPanel()
     CreateLabel("PC_ValMaxRisk", x + 420, y + 100, "0円", 12, redColor, "Arial Bold");
     
     // プログレスバー（セクション内に収まるよう調整）
-       CreateLabel("PC_PhaseProgressLabel", x + 620, y + 15, "サブフェーズ進捗", 10, labelColor);
+      CreateLabel("PC_PhaseProgressLabel", x + 620, y + 15, "サブフェーズ進捗", 10, labelColor);
     CreateProgressBar("PC_PhaseProgress", x + 620, y + 55, 180, 25,
                       GetSubPhaseProgress(), C'52,152,219', C'60,60,60');
     
@@ -300,21 +348,40 @@ void CreateEnhancedPanel()
     y += positionSectionHeight + sectionGap;
     
     // === 統計情報セクション ===
-    int statsSectionHeight = 150;  // 120 → 150
+    int statsSectionHeight = 200;  // 高さを増加
     CreateSection(x, y, width, statsSectionHeight, "統計情報", sectionBg);
-    
-    CreateLabel("PC_LblWinRate", x + padding, y + 55, "直近10勝率", 12, labelColor);
-    CreateLabel("PC_ValWinRate", x + 210, y + 55, "0%", 12, blueColor, "Arial Bold");
-    
-    CreateLabel("PC_LblAvgRR", x + 330, y + 55, "平均RR比", 12, labelColor);
-    CreateLabel("PC_ValAvgRR", x + 550, y + 55, "0.0", 12, blueColor, "Arial Bold");
-    
-    CreateLabel("PC_LblWeekly", x + padding, y + 100, "週次損益", 12, labelColor);
-    CreateLabel("PC_ValWeekly", x + 180, y + 100, "0円", 12, textColor, "Arial Bold");
-    
-    CreateLabel("PC_LblMonthly", x + 330, y + 100, "月次損益", 12, labelColor);
-    CreateLabel("PC_ValMonthly", x + 550, y + 100, "0円", 12, textColor, "Arial Bold");
-    
+
+    // 1行目：勝率とプロフィットファクター
+    CreateLabel("PC_LblWinRate", x + padding, y + 40, "勝率", 12, labelColor);
+    CreateLabel("PC_ValWinRate", x + 120, y + 40, "0%", 12, blueColor, "Arial Bold");
+
+    CreateLabel("PC_LblPF", x + 220, y + 40, "PF", 12, labelColor);
+    CreateLabel("PC_ValPF", x + 280, y + 40, "0.00", 12, greenColor, "Arial Bold");
+
+    CreateLabel("PC_LblRRR", x + 400, y + 40, "実績RRR", 12, labelColor);
+    CreateLabel("PC_ValRRR", x + 550, y + 40, "0.00", 12, blueColor, "Arial Bold");
+
+    // 2行目：総損益
+    CreateLabel("PC_LblTotalWin", x + padding, y + 75, "総利益", 12, labelColor);
+    CreateLabel("PC_ValTotalWin", x + 130, y + 75, "0円", 11, greenColor);
+
+    CreateLabel("PC_LblTotalLoss", x + 280, y + 75, "総損失", 12, labelColor);
+    CreateLabel("PC_ValTotalLoss", x + 390, y + 75, "0円", 11, redColor);
+
+    // 3行目：週次損益と変化率
+    CreateLabel("PC_LblWeekly", x + padding, y + 110, "週次損益", 12, labelColor);
+    CreateLabel("PC_ValWeekly", x + 160, y + 110, "0円", 12, textColor, "Arial Bold");
+
+    CreateLabel("PC_LblWeeklyPercent", x + 280, y + 110, "週次%", 12, labelColor);
+    CreateLabel("PC_ValWeeklyPercent", x + 380, y + 110, "0.0%", 12, textColor, "Arial Bold");
+
+    // 4行目：月次損益と変化率
+    CreateLabel("PC_LblMonthly", x + padding, y + 145, "月次損益", 12, labelColor);
+    CreateLabel("PC_ValMonthly", x + 160, y + 145, "0円", 12, textColor, "Arial Bold");
+
+    CreateLabel("PC_LblMonthlyPercent", x + 280, y + 145, "月次%", 12, labelColor);
+    CreateLabel("PC_ValMonthlyPercent", x + 380, y + 145, "0.0%", 12, textColor, "Arial Bold");
+
     y += statsSectionHeight + sectionGap;
     
     // === LOT計算セクション ===
@@ -385,7 +452,65 @@ void CreateEnhancedPanel()
     CreateButton("PC_BtnCloseLoss", x + 335, y + 155, 295, 35, "損失のみ決済", orangeColor);
 
     y += manageSectionHeight + sectionGap;
-    
+
+
+    // === トレードスコアセクション ===
+    int scoreSectionHeight = 260;
+    CreateSection(x, y, width, scoreSectionHeight, "トレードスコア評価", sectionBg);
+    // スコア表示エリア
+    // 総合スコアとランク
+    CreateLabel("PC_LblTotalScore", x + padding, y + 40, "総合スコア", 14, labelColor);
+    CreateLabel("PC_ValTotalScore", x + 224, y + 30, "---", 16, clrWhite, "Arial Black");
+    CreateLabel("PC_ValRank", x + 424, y + 30, "---", 16, C'255,215,0', "Arial Black");
+
+    // 各カテゴリスコア（2列表示）
+    // 左列
+    CreateLabel("PC_LblProfitScore", x + padding, y + 80, "収益性", 11, labelColor);
+    CreateLabel("PC_ValProfitScore", x + 120, y + 80, "---/200", 11, textColor, "Arial Bold");
+
+    CreateLabel("PC_LblRiskScore", x + padding, y + 110, "リスク管理", 11, labelColor);
+    CreateLabel("PC_ValRiskScore", x + 180, y + 110, "---/300", 11, textColor, "Arial Bold");
+
+    CreateLabel("PC_LblConsistScore", x + padding, y + 140, "一貫性", 11, labelColor);
+    CreateLabel("PC_ValConsistScore", x + 120, y + 140, "---/100", 11, textColor, "Arial Bold");
+
+    CreateLabel("PC_LblGrowthScore", x + padding, y + 170, "成長性", 11, labelColor);
+    CreateLabel("PC_ValGrowthScore", x + 120, y + 170, "---/200", 11, textColor, "Arial Bold");
+
+    // 右列（詳細スコア）
+    CreateLabel("PC_LblScoreDetails", x + 340, y + 80, "詳細評価", 11, labelColor);
+    CreateLabel("PC_LblWinRateS", x + 380, y + 110, "勝率:", 10, labelColor);
+    CreateLabel("PC_ValWinRateS", x + 450, y + 110, "---", 10, textColor);
+
+    CreateLabel("PC_LblRRS", x + 380, y + 140, "PF:", 10, labelColor);
+    CreateLabel("PC_ValRRS", x + 450, y + 140, "---", 10, textColor);
+
+    CreateLabel("PC_LblExpectS", x + 250, y + 170, "期待値:", 10, labelColor);
+    CreateLabel("PC_ValExpectS", x + 340, y + 170, "---", 10, textColor);
+
+    CreateLabel("PC_LblComplianceS", x + 380, y + 170, "遵守率:", 10, labelColor);
+    CreateLabel("PC_ValComplianceS", x + 470, y + 170, "---", 10, textColor);
+
+    // ボーナスペナルティ表示
+    CreateLabel("PC_LblBonus", x + padding, y + 200, "ボーナス", 11, greenColor);
+    CreateLabel("PC_ValBonus", x + 140, y + 200, "+0", 11, greenColor, "Arial Bold");
+
+    CreateLabel("PC_LblPenalty", x + 200, y + 200, "ペナルティ", 11, redColor);
+    CreateLabel("PC_ValPenalty", x + 340, y + 200, "-0", 11, redColor, "Arial Bold");
+
+    // スコアトレンド
+    CreateLabel("PC_LblTrend", x + padding, y + 230, "スコア評価", 11, labelColor);
+    CreateLabel("PC_ValTrend", x + 220, y + 230, "---", 11, textColor);
+
+    // プログレスバー（スコアビジュアル）
+    CreateProgressBarNoText("PC_ScoreProgress", x + 480, y + 40, 180, 30,
+                  0, C'255,215,0', C'60,60,60');
+
+   // パーセント表示を別途追加
+     CreateLabel("PC_ScorePercent", x + 690, y + 40, "0%", 14, clrWhite, "Arial Bold");
+
+    y += scoreSectionHeight + sectionGap;
+
     // === 操作方法 ===
     int helpSectionHeight = 100;  // 80 → 100
     CreateSection(x, y, width, helpSectionHeight, "操作方法", sectionBg);
@@ -553,6 +678,12 @@ void ExecuteMarketOrder(bool isBuy)
     }
     
     todayTradeCount++;
+    if(stats.totalTrades > 0 && stats.winTrades == 0) {
+        tradeScore.consecutiveLosses++;
+    } else {
+        tradeScore.consecutiveLosses = 0;
+    }
+    tradeScore.lastLotSize = calculatedLot;
     calculatedLot = 0; // リセット
 }
 
@@ -702,6 +833,8 @@ void UpdateAll()
     UpdateDailyInfo();
     UpdateStatistics();
     UpdatePanelData();
+    CalculateTradeScore();
+    UpdateTradeScoreDisplay();
 }
 
 //+------------------------------------------------------------------+
@@ -802,44 +935,71 @@ void UpdateStatistics()
 {
     datetime currentTime = TimeCurrent();
     
-    // 直近10トレードの統計
+    // 直近30日間の全トレードを分析
     datetime endTime = currentTime;
-    datetime startTime = endTime - 30 * 24 * 60 * 60; // 30日前
+    datetime startTime = endTime - 30 * 24 * 60 * 60;
     HistorySelect(startTime, endTime);
     
-    int recentTrades = 0;
-    int recentWins = 0;
-    double totalRR = 0;
+    // 統計用変数
+    int totalTrades = 0;
+    int winTrades = 0;
+    int lossTrades = 0;
+    double totalWinAmount = 0;
+    double totalLossAmount = 0;
     
+    // 全ディールを分析
     int deals = HistoryDealsTotal();
-    for(int i = deals - 1; i >= 0 && recentTrades < 10; i--)
+    for(int i = 0; i < deals; i++)
     {
         ulong dealTicket = HistoryDealGetTicket(i);
         if(HistoryDealGetString(dealTicket, DEAL_SYMBOL) == _Symbol)
         {
             double profit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
+            double commission = HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
+            double swap = HistoryDealGetDouble(dealTicket, DEAL_SWAP);
+            double totalProfit = profit + commission + swap;
+            
+            // エントリーは除外（profit != 0）
             if(profit != 0)
             {
-                recentTrades++;
-                if(profit > 0) recentWins++;
-                // RR比の簡易計算（実際の損切りとの比率）
-                if(profit > 0 && riskAmount > 0)
-                    totalRR += profit / riskAmount;
+                totalTrades++;
+                
+                if(totalProfit > 0)
+                {
+                    winTrades++;
+                    totalWinAmount += totalProfit;
+                }
+                else if(totalProfit < 0)
+                {
+                    lossTrades++;
+                    totalLossAmount += MathAbs(totalProfit);
+                }
             }
         }
     }
     
-    stats.totalTrades = recentTrades;
-    stats.winTrades = recentWins;
-    stats.totalRR = totalRR;
+    // 統計値の計算
+    stats.totalTrades = totalTrades;
+    stats.winTrades = winTrades;
+    stats.totalWinAmount = totalWinAmount;
+    stats.totalLossAmount = totalLossAmount;
     
-    // 週次損益の計算（現在の曜日から週初めを計算）
+    // 平均値の計算
+    stats.avgWinAmount = winTrades > 0 ? totalWinAmount / winTrades : 0;
+    stats.avgLossAmount = lossTrades > 0 ? totalLossAmount / lossTrades : 0;
+    
+    // プロフィットファクターの計算
+    stats.profitFactor = totalLossAmount > 0 ? totalWinAmount / totalLossAmount : 0;
+    
+    // 実績RRR（平均利益÷平均損失）の計算
+    stats.realRRR = stats.avgLossAmount > 0 ? stats.avgWinAmount / stats.avgLossAmount : 0;
+    
+    // 週次・月次損益の計算（既存のコード）
     MqlDateTime timeStruct;
     TimeToStruct(currentTime, timeStruct);
     int daysSinceMonday = (timeStruct.day_of_week == 0) ? 6 : timeStruct.day_of_week - 1;
     datetime weekStart = currentTime - daysSinceMonday * 24 * 60 * 60;
     
-    // 月次損益の計算（月初を取得）
     string monthStartStr = StringFormat("%04d.%02d.01", timeStruct.year, timeStruct.mon);
     datetime monthStart = StringToTime(monthStartStr);
     
@@ -929,15 +1089,55 @@ void UpdatePanelData()
     ObjectSetInteger(0, "PC_ValAuto", OBJPROP_COLOR, EnableAutoClose ? C'76,175,80' : C'100,100,100');
     
     // 統計情報
-    double winRate = stats.totalTrades > 0 ? (double)stats.winTrades / stats.totalTrades * 100 : 0;
-    double avgRR = stats.winTrades > 0 ? stats.totalRR / stats.winTrades : 0;
+     double winRate = stats.totalTrades > 0 ? (double)stats.winTrades / stats.totalTrades * 100 : 0;
     
+    // 週次・月次の変化率を計算
+    double weeklyChangePercent = 0;
+    double monthlyChangePercent = 0;
+    
+    double weekStartBalance = accountBalance - stats.weeklyProfit;
+    if(weekStartBalance > 0) {
+        weeklyChangePercent = (stats.weeklyProfit / weekStartBalance) * 100;
+    }
+    
+    double monthStartBalance = accountBalance - stats.monthlyProfit;
+    if(monthStartBalance > 0) {
+        monthlyChangePercent = (stats.monthlyProfit / monthStartBalance) * 100;
+    }
+    
+    // 表示更新
     ObjectSetString(0, "PC_ValWinRate", OBJPROP_TEXT, DoubleToString(winRate, 1) + "%");
-    ObjectSetString(0, "PC_ValAvgRR", OBJPROP_TEXT, DoubleToString(avgRR, 1));
+    
+    // プロフィットファクター表示
+    ObjectSetString(0, "PC_ValPF", OBJPROP_TEXT, DoubleToString(stats.profitFactor, 2));
+    color pfColor = stats.profitFactor >= 1.5 ? C'76,175,80' : 
+                   (stats.profitFactor >= 1.0 ? C'255,152,0' : C'244,67,54');
+    ObjectSetInteger(0, "PC_ValPF", OBJPROP_COLOR, pfColor);
+    
+    // 実績RRR表示
+    ObjectSetString(0, "PC_ValRRR", OBJPROP_TEXT, DoubleToString(stats.realRRR, 2));
+    ObjectSetInteger(0, "PC_ValRRR", OBJPROP_COLOR, stats.realRRR >= 1.0 ? C'76,175,80' : C'244,67,54');
+    
+    // 総損益表示
+    ObjectSetString(0, "PC_ValTotalWin", OBJPROP_TEXT, IntegerToString((int)stats.totalWinAmount) + "円");
+    ObjectSetString(0, "PC_ValTotalLoss", OBJPROP_TEXT, IntegerToString((int)stats.totalLossAmount) + "円");
+    
+    // 週次・月次表示
     ObjectSetString(0, "PC_ValWeekly", OBJPROP_TEXT, IntegerToString((int)stats.weeklyProfit) + "円");
     ObjectSetInteger(0, "PC_ValWeekly", OBJPROP_COLOR, stats.weeklyProfit >= 0 ? C'76,175,80' : C'244,67,54');
+    
+    ObjectSetString(0, "PC_ValWeeklyPercent", OBJPROP_TEXT, 
+                    (weeklyChangePercent >= 0 ? "+" : "") + DoubleToString(weeklyChangePercent, 2) + "%");
+    ObjectSetInteger(0, "PC_ValWeeklyPercent", OBJPROP_COLOR, 
+                     weeklyChangePercent >= 0 ? C'76,175,80' : C'244,67,54');
+    
     ObjectSetString(0, "PC_ValMonthly", OBJPROP_TEXT, IntegerToString((int)stats.monthlyProfit) + "円");
     ObjectSetInteger(0, "PC_ValMonthly", OBJPROP_COLOR, stats.monthlyProfit >= 0 ? C'76,175,80' : C'244,67,54');
+    
+    ObjectSetString(0, "PC_ValMonthlyPercent", OBJPROP_TEXT, 
+                    (monthlyChangePercent >= 0 ? "+" : "") + DoubleToString(monthlyChangePercent, 2) + "%");
+    ObjectSetInteger(0, "PC_ValMonthlyPercent", OBJPROP_COLOR, 
+                     monthlyChangePercent >= 0 ? C'76,175,80' : C'244,67,54');
     
     // LOT計算結果
     ObjectSetString(0, "PC_ValCalcRisk", OBJPROP_TEXT, 
@@ -1127,7 +1327,6 @@ void SaveTradeStats()
 {
     GlobalVariableSet("PC_TotalTrades", stats.totalTrades);
     GlobalVariableSet("PC_WinTrades", stats.winTrades);
-    GlobalVariableSet("PC_TotalRR", stats.totalRR);
     GlobalVariableSet("PC_WeeklyProfit", stats.weeklyProfit);
     GlobalVariableSet("PC_MonthlyProfit", stats.monthlyProfit);
 }
@@ -1141,8 +1340,6 @@ void LoadTradeStats()
         stats.totalTrades = (int)GlobalVariableGet("PC_TotalTrades");
     if(GlobalVariableCheck("PC_WinTrades"))
         stats.winTrades = (int)GlobalVariableGet("PC_WinTrades");
-    if(GlobalVariableCheck("PC_TotalRR"))
-        stats.totalRR = GlobalVariableGet("PC_TotalRR");
     if(GlobalVariableCheck("PC_WeeklyProfit"))
         stats.weeklyProfit = GlobalVariableGet("PC_WeeklyProfit");
     if(GlobalVariableCheck("PC_MonthlyProfit"))
@@ -1402,3 +1599,229 @@ string GetPhaseDetails()
     return details;
 }
 
+//+------------------------------------------------------------------+
+//| トレードスコア計算                                               |
+//+------------------------------------------------------------------+
+void CalculateTradeScore()
+{
+    double winRate = 0;
+    if(stats.totalTrades > 0) {
+        winRate = (double)stats.winTrades / stats.totalTrades * 100;
+    }
+    
+    // A. 収益性スコア（200点に変更）
+    // 勝率スコア（40%以上で加点、70%で満点）
+    if(winRate >= 70) {
+        tradeScore.winRateScore = 100;
+    }
+    else if(winRate >= 40) {
+        tradeScore.winRateScore = (winRate - 40) * 3.33;
+    }
+    else {
+        tradeScore.winRateScore = 0;
+    }
+    
+    // プロフィットファクタースコア
+    // PF 1.0以上で加点、3.0で満点
+    if(stats.profitFactor >= 3.0) {
+        tradeScore.expectancyScore = 100;
+    }
+    else if(stats.profitFactor >= 1.0) {
+        tradeScore.expectancyScore = (stats.profitFactor - 1.0) * 50; // 1.0-3.0を0-100点に変換
+    }
+    else {
+        tradeScore.expectancyScore = 0;
+    }
+    
+    // B. リスク管理スコア（300点）
+    // ルール遵守率（日次上限、推奨ロット使用）
+    tradeScore.ruleComplianceScore = 100 - (tradeScore.ruleViolations * 10); // 違反1回につき-10点
+    tradeScore.ruleComplianceScore = MathMax(0, tradeScore.ruleComplianceScore);
+    
+    // ドローダウン管理（-10%以内で満点）
+    if(tradeScore.maxDrawdown >= -10) {
+        tradeScore.drawdownScore = 100 + (tradeScore.maxDrawdown * 10); // -10%で0点、0%で100点
+    } else {
+        tradeScore.drawdownScore = 0;
+    }
+    
+    // 資金管理スコア（適切なロットサイジング）
+    tradeScore.moneyManageScore = 100; // デフォルト満点、違反があれば減点
+    
+    // C. 一貫性スコア（100点）
+    // 週次成績の安定性（標準偏差が小さいほど高得点）
+    double weeklyStdDev = CalculateWeeklyStandardDeviation();
+    if(weeklyStdDev < 5) tradeScore.consistencyScore = 100;
+    else if(weeklyStdDev < 10) tradeScore.consistencyScore = 100 - (weeklyStdDev - 5) * 10;
+    else tradeScore.consistencyScore = 50;
+    
+    // D. 成長スコア（200点）
+    // スキル向上（RRR、勝率の改善）
+    double improvement = CalculateSkillImprovement();
+    tradeScore.skillScore = MathMin(100, 50 + improvement * 5);
+    
+    // フェーズ進捗
+    tradeScore.progressScore = GetOverallProgress(); // 既存の全体進捗率を使用
+    
+    // ボーナス計算
+    tradeScore.bonusPoints = 0;
+    // 週間無敗ボーナス
+    if(IsWeeklyUndefeated()) tradeScore.bonusPoints += 50;
+    // 週間全勝ボーナス
+    if(IsWeeklyPerfect()) tradeScore.bonusPoints += 100;
+    // 改善ボーナス
+    if(tradeScore.totalScore > tradeScore.prevWeekScore) tradeScore.bonusPoints += 20;
+    
+    // ペナルティ計算
+    tradeScore.penaltyPoints = 0;
+    // オーバートレード
+    if(todayTradeCount > DailyTradeLimit) tradeScore.penaltyPoints += 50;
+    // リベンジトレード（連敗後の過大ロット）
+    if(CheckRevengeTrading()) tradeScore.penaltyPoints += 30;
+    
+    // 総合スコア計算
+    double profitScore = tradeScore.winRateScore + tradeScore.expectancyScore; // 200点満点
+    double riskScore = tradeScore.ruleComplianceScore + tradeScore.drawdownScore + tradeScore.moneyManageScore; // 300点満点
+    double growthScore = tradeScore.skillScore + tradeScore.progressScore; // 200点満点
+    
+    tradeScore.totalScore = profitScore + riskScore + tradeScore.consistencyScore + growthScore;
+    tradeScore.totalScore += tradeScore.bonusPoints - tradeScore.penaltyPoints;
+    tradeScore.totalScore = MathMax(0, MathMin(900, tradeScore.totalScore)); // 900点満点に変更
+    
+    // ランク判定（900点満点に合わせて調整）
+    if(tradeScore.totalScore >= 855) tradeScore.rank = "S+";      // 95%以上
+    else if(tradeScore.totalScore >= 810) tradeScore.rank = "S";   // 90%以上
+    else if(tradeScore.totalScore >= 765) tradeScore.rank = "A+";  // 85%以上
+    else if(tradeScore.totalScore >= 720) tradeScore.rank = "A";   // 80%以上
+    else if(tradeScore.totalScore >= 630) tradeScore.rank = "B+";  // 70%以上
+    else if(tradeScore.totalScore >= 540) tradeScore.rank = "B";   // 60%以上
+    else if(tradeScore.totalScore >= 450) tradeScore.rank = "C+";  // 50%以上
+    else tradeScore.rank = "C";
+}
+
+//+------------------------------------------------------------------+
+//| 週次標準偏差計算                                                 |
+//+------------------------------------------------------------------+
+double CalculateWeeklyStandardDeviation()
+{
+    // 簡易実装：実際には週次成績の履歴から計算
+    return 5.0; // 仮の値
+}
+
+//+------------------------------------------------------------------+
+//| スキル向上度計算                                                 |
+//+------------------------------------------------------------------+
+double CalculateSkillImprovement()
+{
+    // 簡易実装：前月との比較
+    return 10.0; // 仮の値
+}
+
+//+------------------------------------------------------------------+
+//| 週間無敗チェック                                                 |
+//+------------------------------------------------------------------+
+bool IsWeeklyUndefeated()
+{
+    // 今週の負けトレードがないかチェック
+    return false; // 仮の実装
+}
+
+//+------------------------------------------------------------------+
+//| 週間全勝チェック                                                 |
+//+------------------------------------------------------------------+
+bool IsWeeklyPerfect()
+{
+    // 今週全勝かチェック
+    return false; // 仮の実装
+}
+
+//+------------------------------------------------------------------+
+//| リベンジトレードチェック                                         |
+//+------------------------------------------------------------------+
+bool CheckRevengeTrading()
+{
+    // 連敗後にロットが増えていないかチェック
+    if(tradeScore.consecutiveLosses >= 2 && calculatedLot > tradeScore.lastLotSize) {
+        return true;
+    }
+    return false;
+}
+
+//+------------------------------------------------------------------+
+//| トレードスコア表示更新                                           |
+//+------------------------------------------------------------------+
+void UpdateTradeScoreDisplay()
+{
+    // 総合スコアとランク（900点満点として表示）
+    ObjectSetString(0, "PC_ValTotalScore", OBJPROP_TEXT, IntegerToString((int)tradeScore.totalScore) + "/900");
+    ObjectSetString(0, "PC_ValRank", OBJPROP_TEXT, tradeScore.rank);
+    
+    // ランクによる色分け - 変更なし
+    color rankColor = C'255,215,0';
+    if(tradeScore.rank == "S+" || tradeScore.rank == "S") rankColor = C'255,215,0';
+    else if(tradeScore.rank == "A+" || tradeScore.rank == "A") rankColor = C'192,192,192';
+    else if(tradeScore.rank == "B+" || tradeScore.rank == "B") rankColor = C'205,127,50';
+    else rankColor = C'160,160,160';
+    ObjectSetInteger(0, "PC_ValRank", OBJPROP_COLOR, rankColor);
+    
+    // 各カテゴリスコア（収益性は200点満点）
+    double profitScore = tradeScore.winRateScore + tradeScore.expectancyScore; // RRスコアを除外
+    double riskScore = tradeScore.ruleComplianceScore + tradeScore.drawdownScore + tradeScore.moneyManageScore;
+    double growthScore = tradeScore.skillScore + tradeScore.progressScore;
+    
+    ObjectSetString(0, "PC_ValProfitScore", OBJPROP_TEXT, IntegerToString((int)profitScore) + "/200");
+    ObjectSetString(0, "PC_ValRiskScore", OBJPROP_TEXT, IntegerToString((int)riskScore) + "/300");
+    ObjectSetString(0, "PC_ValConsistScore", OBJPROP_TEXT, IntegerToString((int)tradeScore.consistencyScore) + "/100");
+    ObjectSetString(0, "PC_ValGrowthScore", OBJPROP_TEXT, IntegerToString((int)growthScore) + "/200");
+    
+    // 詳細スコア（勝率とPFを表示）
+    double winRate = stats.totalTrades > 0 ? (double)stats.winTrades / stats.totalTrades * 100 : 0;
+    ObjectSetString(0, "PC_ValWinRateS", OBJPROP_TEXT, DoubleToString(winRate, 1) + "%");
+    ObjectSetString(0, "PC_ValRRS", OBJPROP_TEXT, DoubleToString(stats.profitFactor, 2));  // PF値を表示
+    ObjectSetString(0, "PC_ValExpectS", OBJPROP_TEXT, IntegerToString((int)tradeScore.expectancyScore));
+    ObjectSetString(0, "PC_ValComplianceS", OBJPROP_TEXT, IntegerToString((int)tradeScore.ruleComplianceScore) + "%");
+    
+    // ボーナス・ペナルティ - 変更なし
+    ObjectSetString(0, "PC_ValBonus", OBJPROP_TEXT, "+" + IntegerToString((int)tradeScore.bonusPoints));
+    ObjectSetString(0, "PC_ValPenalty", OBJPROP_TEXT, "-" + IntegerToString((int)tradeScore.penaltyPoints));
+    
+    // トレンド - 変更なし
+    string trend = "→";
+    color trendColor = textColor;
+    if(tradeScore.totalScore > tradeScore.prevWeekScore) {
+        trend = "↑ 改善中";
+        trendColor = greenColor;
+    } else if(tradeScore.totalScore < tradeScore.prevWeekScore) {
+        trend = "↓ 要注意";
+        trendColor = redColor;
+    }
+    ObjectSetString(0, "PC_ValTrend", OBJPROP_TEXT, trend);
+    ObjectSetInteger(0, "PC_ValTrend", OBJPROP_COLOR, trendColor);
+    
+    // プログレスバー更新（900点満点を100%に変換）
+        double scorePercent = tradeScore.totalScore / 9;
+    UpdateProgressBar("PC_ScoreProgress", scorePercent);
+    
+    // パーセント表示を別途更新
+    ObjectSetString(0, "PC_ScorePercent", OBJPROP_TEXT, 
+                    DoubleToString(scorePercent, 1) + "%");
+}
+
+//+------------------------------------------------------------------+
+//| プログレスバー作成関数（テキストなし版）                         |
+//+------------------------------------------------------------------+
+void CreateProgressBarNoText(string name, int x, int y, int w, int h, double percent, 
+                             color fillColor, color bgColor)
+{
+    // 背景
+    string bgName = name + "_bg";
+    CreateRect(bgName, x, y, w, h, bgColor);
+    
+    // 進捗バー
+    string fillName = name + "_fill";
+    int fillWidth = (int)(w * percent / 100);
+    if(fillWidth > 0)
+    {
+        CreateRect(fillName, x, y, fillWidth, h, fillColor);
+    }
+}
