@@ -32,6 +32,62 @@ input int      PanelPosY = 50;             // パネルY位置
 CTrade trade;
 CPositionInfo position;
 CDealInfo deal;
+enum PHASE_STAGE
+{
+    STAGE_EARLY = 0,    // 序盤
+    STAGE_MID = 1,      // 中盤
+    STAGE_LATE = 2      // 終盤
+};
+
+struct PhaseInfo
+{
+    int phase;
+    int stage;
+    double startBalance;
+    double endBalance;
+    string stageName;
+    string phaseTitle;
+    double riskPercent;
+    double maxRisk;
+};
+
+int currentStage;
+PhaseInfo phaseData[15] = {
+    // Phase 1: 土台構築期 (5K-20K)
+    {1, STAGE_EARLY, 5000, 8000, "初級", "P1", 7.0, 400},
+    {1, STAGE_MID, 8000, 12000, "中級", "P1", 7.0, 400},
+    {1, STAGE_LATE, 12000, 20000, "上級", "P1", 7.0, 400},
+    
+    // Phase 2: 安定化期 (20K-50K)
+    {2, STAGE_EARLY, 20000, 28000, "初級", "P2", 6.0, 800},
+    {2, STAGE_MID, 28000, 38000, "中級", "P2", 6.0, 800},
+    {2, STAGE_LATE, 38000, 50000, "上級", "P2", 6.0, 800},
+    
+    // Phase 3: 発展期 (50K-150K)
+    {3, STAGE_EARLY, 50000, 75000, "初級", "P3", 5.0, 1500},
+    {3, STAGE_MID, 75000, 110000, "中級", "P3", 5.0, 1500},
+    {3, STAGE_LATE, 110000, 150000, "上級", "P3", 5.0, 1500},
+    
+    // Phase 4: 拡大期 (150K-500K)
+    {4, STAGE_EARLY, 150000, 250000, "初級", "P4", 4.0, 3000},
+    {4, STAGE_MID, 250000, 375000, "中級", "P4", 4.0, 3000},
+    {4, STAGE_LATE, 375000, 500000, "上級", "P4", 4.0, 3000},
+    
+    // Phase 5: 成熟期 (500K-3M)
+    {5, STAGE_EARLY, 500000, 1000000, "初級", "P5", 3.0, 5000},
+    {5, STAGE_MID, 1000000, 2000000, "中級", "P5", 3.0, 8000},
+    {5, STAGE_LATE, 2000000, 3000000, "上級", "P5", 3.0, 10000}
+};
+
+string badges[15] = {
+    "Lv1", "Lv2", "Lv3",      // Phase 1
+    "Lv4", "Lv5", "Lv6",      // Phase 2  
+    "Lv7", "Lv8", "Lv9",      // Phase 3
+    "Lv10", "Lv11", "Lv12",   // Phase 4
+    "Lv13", "Lv14", "Lv15"    // Phase 5
+};
+
+static double lastBalance = 0; // レベルアップチェック用
 double accountBalance, currentRiskPercent, currentMaxRisk;
 int currentPhase;
 
@@ -101,6 +157,12 @@ void OnTimer()
     UpdateAll();
     CheckAutoClose();
     CheckDailyReset();
+    // レベルアップチェック
+    if(lastBalance > 0)
+    {
+        CheckLevelUp(lastBalance, accountBalance);
+    }
+    lastBalance = accountBalance;
 }
 
 //+------------------------------------------------------------------+
@@ -151,13 +213,12 @@ void CreateEnhancedPanel()
 {
     int x = PanelPosX;
     int y = PanelPosY;
-    int width = 800;
-    int lineHeight = 45;  
-    int sectionGap = 25;
-    int padding = 20;
+    int width = 850;
+    int lineHeight = 55;      // 50 → 55
+    int sectionGap = 40;      // 30 → 40（セクション間の余白を増加）
+    int padding = 25;
     
-    // 色定義
-    color bgColor = C'25,27,30';
+       color bgColor = C'25,27,30';
     color sectionBg = C'35,37,40';
     color headerBg = C'45,55,72';
     color textColor = C'220,220,220';
@@ -166,174 +227,173 @@ void CreateEnhancedPanel()
     color redColor = C'244,67,54';
     color blueColor = C'33,150,243';
     color orangeColor = C'255,152,0';
-    
-    // メイン背景
-    CreateRect("PC_MainBg", x, y, width, 1050, bgColor);
+
+    // メイン背景（高さを大幅に増加）
+    CreateRect("PC_MainBg", x, y, width, 1500, bgColor);  // 1250 → 1500
     
     // ヘッダー
-    CreateRect("PC_Header", x, y, width, 50, headerBg);
-    CreateLabel("PC_Title", x + width/2, y + 15, "MT5 Trade Management System - Pips Version", 
-                16, clrWhite, "Arial Bold", ANCHOR_CENTER);
+    CreateRect("PC_Header", x, y, width, 60, headerBg);   // 50 → 60
+    CreateLabel("PC_Title", x + width/2, y + 20, "MT5 Trade Management System - Pips Version", 
+                16, clrWhite, "Arial Bold", ANCHOR_CENTER);   // y+15 → y+20
     
-    y += 65;
+    y += 70;  // 65 → 70
     
     // === アカウント情報セクション ===
-    CreateSection(x, y, width, 120, "アカウント情報", sectionBg);
+    int accountSectionHeight = 160;  // 140 → 160
+    CreateSection(x, y, width, accountSectionHeight, "アカウント情報", sectionBg);
     
-    // Phase & Balance - 1行目
-    CreateLabel("PC_LblPhase", x + padding, y + 45, "Phase", 12, labelColor);
-    CreateLabel("PC_ValPhase", x + 120, y + 45, "1", 12, greenColor, "Arial Bold");
+    // 内容の配置（Y座標を調整してセクション内に収める）
+    CreateLabel("PC_LblPhase", x + padding, y + 55, "Phase", 12, labelColor);
+    CreateLabel("PC_ValPhase", x + 130, y + 55, "1", 12, greenColor, "Arial Bold");
     
-    CreateLabel("PC_LblBalance", x + 200, y + 45, "残高", 12, labelColor);
-    CreateLabel("PC_ValBalance", x + 380, y + 45, "0円", 12, textColor, "Arial Bold");
+    CreateLabel("PC_LblBalance", x + 350, y + 55, "残高", 12, labelColor);
+    CreateLabel("PC_ValBalance", x + 500, y + 55, "0円", 12, textColor, "Arial Bold");
     
-    // Risk & Max Risk - 2行目
-    CreateLabel("PC_LblRisk", x + padding, y + 85, "Risk", 12, labelColor);
-    CreateLabel("PC_ValRisk", x + 100, y + 85, "0%", 12, redColor, "Arial Bold");
+    CreateLabel("PC_LblRisk", x + padding, y + 100, "Risk", 12, labelColor);
+    CreateLabel("PC_ValRisk", x + 110, y + 100, "0%", 12, redColor, "Arial Bold");
     
-    CreateLabel("PC_LblMaxRisk", x + 200, y + 85, "Max Risk", 12, labelColor);
-    CreateLabel("PC_ValMaxRisk", x + 400, y + 85, "0円", 12, redColor, "Arial Bold");
+    CreateLabel("PC_LblMaxRisk", x + 250, y + 100, "Max Risk", 12, labelColor);
+    CreateLabel("PC_ValMaxRisk", x + 420, y + 100, "0円", 12, redColor, "Arial Bold");
     
-    // フェーズ進捗バー
-    CreateProgressBar("PC_PhaseProgress", x + 600, y + 45, 150, 20, 
-                      GetPhaseProgress(), C'52,152,219', C'60,60,60');
-    CreateLabel("PC_PhaseProgressLabel", x + 600, y + 5, "フェーズ進捗", 10, labelColor);
+    // プログレスバー（セクション内に収まるよう調整）
+       CreateLabel("PC_PhaseProgressLabel", x + 620, y + 15, "サブフェーズ進捗", 10, labelColor);
+    CreateProgressBar("PC_PhaseProgress", x + 620, y + 55, 180, 25,
+                      GetSubPhaseProgress(), C'52,152,219', C'60,60,60');
     
-    // リスク使用率ゲージ
-    CreateProgressBar("PC_RiskGauge", x + 600, y + 100, 150, 20, 
-                      GetRiskUsageRate(), C'244,67,54', C'60,60,60');
-    CreateLabel("PC_RiskGaugeLabel", x + 600, y + 65, "リスク使用率", 10, labelColor);
+    CreateLabel("PC_OverallProgressLabel", x + 620, y + 125, "全体進捗", 9, labelColor);
+    CreateProgressBar("PC_OverallProgress", x + 620, y + 100, 180, 20,
+                      GetOverallProgress(), C'76,175,80', C'60,60,60');
     
-    y += 130;
+    y += accountSectionHeight + sectionGap;
     
     // === 日次管理セクション ===
-    CreateSection(x, y, width, 120, "日次管理", sectionBg);
+    int dailySectionHeight = 150;  // 120 → 150
+    CreateSection(x, y, width, dailySectionHeight, "日次管理", sectionBg);
     
-    // Today's Trade Count & Daily P/L - 1行目
-    CreateLabel("PC_LblTodayTrades", x + padding, y + 45, "本日取引", 12, labelColor);
-    CreateLabel("PC_ValTodayTrades", x + 200, y + 45, "0/3", 12, blueColor, "Arial Bold");
+    CreateLabel("PC_LblTodayTrades", x + padding, y + 55, "本日取引", 12, labelColor);
+    CreateLabel("PC_ValTodayTrades", x + 200, y + 55, "0/3", 12, blueColor, "Arial Bold");
     
-    CreateLabel("PC_LblTodayPL", x + 280, y + 45, "日次損益", 12, labelColor);
-    CreateLabel("PC_ValTodayPL", x + 480, y + 45, "0円", 12, textColor, "Arial Bold");
+    CreateLabel("PC_LblTodayPL", x + 280, y + 55, "日次損益", 12, labelColor);
+    CreateLabel("PC_ValTodayPL", x + 480, y + 55, "0円", 12, textColor, "Arial Bold");
     
-    // Trade Status - 2行目
-    CreateLabel("PC_LblTradeStatus", x + padding, y + 85, "取引状態", 12, labelColor);
-    CreateLabel("PC_ValTradeStatus", x + 160, y + 85, "取引可能", 12, greenColor, "Arial Bold");
+    CreateLabel("PC_LblTradeStatus", x + padding, y + 100, "取引状態", 12, labelColor);
+    CreateLabel("PC_ValTradeStatus", x + 160, y + 100, "取引可能", 12, greenColor, "Arial Bold");
     
-    y += 130;
+    y += dailySectionHeight + sectionGap;
     
     // === ポジション状況セクション ===
-    CreateSection(x, y, width, 120, "ポジション状況", sectionBg);
+    int positionSectionHeight = 150;  // 120 → 150
+    CreateSection(x, y, width, positionSectionHeight, "ポジション状況", sectionBg);
     
-    // Position Count & P/L - 1行目
-    CreateLabel("PC_LblPosCount", x + padding, y + 45, "保有数", 12, labelColor);
-    CreateLabel("PC_ValPosCount", x + 140, y + 45, "0", 12, textColor, "Arial Bold");
+    CreateLabel("PC_LblPosCount", x + padding, y + 55, "保有数", 12, labelColor);
+    CreateLabel("PC_ValPosCount", x + 140, y + 55, "0", 12, textColor, "Arial Bold");
     
-    CreateLabel("PC_LblPL", x + 200, y + 45, "損益", 12, labelColor);
-    CreateLabel("PC_ValPL", x + 280, y + 45, "0円", 12, textColor, "Arial Bold");
+    CreateLabel("PC_LblPL", x + 200, y + 55, "損益", 12, labelColor);
+    CreateLabel("PC_ValPL", x + 280, y + 55, "0円", 12, textColor, "Arial Bold");
     
-    // Pips & Auto Close - 2行目
-    CreateLabel("PC_LblPips", x + padding, y + 85, "Pips", 12, labelColor);
-    CreateLabel("PC_ValPips", x + 100, y + 85, "0.0", 12, textColor, "Arial Bold");
+    CreateLabel("PC_LblPips", x + padding, y + 100, "Pips", 12, labelColor);
+    CreateLabel("PC_ValPips", x + 100, y + 100, "0.0", 12, textColor, "Arial Bold");
     
-    CreateLabel("PC_LblAuto", x + 200, y + 85, "自動決済", 12, labelColor);
-    CreateLabel("PC_ValAuto", x + 380, y + 85, "OFF", 12, greenColor, "Arial Bold");
+    CreateLabel("PC_LblAuto", x + 200, y + 100, "自動決済", 12, labelColor);
+    CreateLabel("PC_ValAuto", x + 380, y + 100, "OFF", 12, greenColor, "Arial Bold");
     
-    y += 130;
+    y += positionSectionHeight + sectionGap;
     
     // === 統計情報セクション ===
-    CreateSection(x, y, width, 120, "統計情報", sectionBg);
+    int statsSectionHeight = 150;  // 120 → 150
+    CreateSection(x, y, width, statsSectionHeight, "統計情報", sectionBg);
     
-    // Win Rate & Average RR - 1行目
-    CreateLabel("PC_LblWinRate", x + padding, y + 45, "直近10勝率", 12, labelColor);
-    CreateLabel("PC_ValWinRate", x + 210, y + 45, "0%", 12, blueColor, "Arial Bold");
+    CreateLabel("PC_LblWinRate", x + padding, y + 55, "直近10勝率", 12, labelColor);
+    CreateLabel("PC_ValWinRate", x + 210, y + 55, "0%", 12, blueColor, "Arial Bold");
     
-    CreateLabel("PC_LblAvgRR", x + 330, y + 45, "平均RR比", 12, labelColor);
-    CreateLabel("PC_ValAvgRR", x + 550, y + 45, "0.0", 12, blueColor, "Arial Bold");
+    CreateLabel("PC_LblAvgRR", x + 330, y + 55, "平均RR比", 12, labelColor);
+    CreateLabel("PC_ValAvgRR", x + 550, y + 55, "0.0", 12, blueColor, "Arial Bold");
     
-    // Weekly & Monthly - 2行目
-    CreateLabel("PC_LblWeekly", x + padding, y + 75, "週次損益", 12, labelColor);
-    CreateLabel("PC_ValWeekly", x + 180, y + 85, "0円", 12, textColor, "Arial Bold");
+    CreateLabel("PC_LblWeekly", x + padding, y + 100, "週次損益", 12, labelColor);
+    CreateLabel("PC_ValWeekly", x + 180, y + 100, "0円", 12, textColor, "Arial Bold");
     
-    CreateLabel("PC_LblMonthly", x + 330, y + 85, "月次損益", 12, labelColor);
-    CreateLabel("PC_ValMonthly", x + 550, y + 85, "0円", 12, textColor, "Arial Bold");
+    CreateLabel("PC_LblMonthly", x + 330, y + 100, "月次損益", 12, labelColor);
+    CreateLabel("PC_ValMonthly", x + 550, y + 100, "0円", 12, textColor, "Arial Bold");
     
-    y += 130;
+    y += statsSectionHeight + sectionGap;
     
     // === LOT計算セクション ===
-    CreateSection(x, y, width, 240, "LOT計算", sectionBg);
-    
+    int lotSectionHeight = 280;
+    CreateSection(x, y, width, lotSectionHeight, "LOT計算", sectionBg);
+
     // SL pips入力
     CreateLabel("PC_LblSLPips", x + padding, y + 40, "S/L pips", 13, labelColor);
-    CreateEditBox(slPipsEditName, x + 120, y + 35, 100, 30, 
-                  DoubleToString(inputSLPips, 1), 14, textColor, sectionBg);
-    
+    CreateEditBox(slPipsEditName, x + 160, y + 45, 100, 30, 
+                DoubleToString(inputSLPips, 1), 14, textColor, sectionBg);
+
     // TP pips入力
     CreateLabel("PC_LblTPPips", x + 280, y + 40, "T/P pips", 13, labelColor);
-    CreateEditBox(tpPipsEditName, x + 380, y + 35, 100, 30, 
-                  DoubleToString(inputTPPips, 1), 14, textColor, sectionBg);
-    
+    CreateEditBox(tpPipsEditName, x + 430, y + 45, 100, 30, 
+                DoubleToString(inputTPPips, 1), 14, textColor, sectionBg);
+
     // リスク額入力
     CreateLabel("PC_LblRiskAmount", x + padding, y + 85, "損失額", 13, labelColor);
-    CreateEditBox(riskAmountEditName, x + 120, y + 80, 100, 30, 
-                  "0", 14, textColor, sectionBg);
-    CreateLabel("PC_LblRiskAmountYen", x + 225, y + 85, "円", 13, labelColor);
-    
+    CreateEditBox(riskAmountEditName, x + 160, y + 90, 100, 30, 
+                "0", 14, textColor, sectionBg);
+    CreateLabel("PC_LblRiskAmountYen", x + 255, y + 90, "円", 13, labelColor);
+
     // リスク率入力
-    CreateLabel("PC_LblRiskPercent", x + 280, y + 85, "損失率", 13, labelColor);
-    CreateEditBox(riskPercentEditName, x + 380, y + 80, 100, 30, 
-                  "0", 14, textColor, sectionBg);
+    CreateLabel("PC_LblRiskPercent", x + 300, y + 85, "損失率", 13, labelColor);
+    CreateEditBox(riskPercentEditName, x + 420, y + 95, 100, 30, 
+                "0", 14, textColor, sectionBg);
     CreateLabel("PC_LblRiskPercentMark", x + 485, y + 85, "%", 13, labelColor);
-    
+
     // 推奨値表示
     CreateLabel("PC_LblRecommend", x + padding, y + 125, "推奨リスク", 13, labelColor);
-    CreateLabel("PC_ValRecommend", x + 160, y + 125, "---", 12, C'100,150,250', "Arial");
-    
+    CreateLabel("PC_ValRecommend", x + 220, y + 125, "---", 12, C'100,150,250', "Arial");
+
     // 計算結果表示
     CreateLabel("PC_LblCalcRisk", x + padding, y + 155, "使用リスク額", 13, labelColor);
-    CreateLabel("PC_ValCalcRisk", x + 160, y + 155, "---", 13, redColor, "Arial Bold");
-    
-    CreateLabel("PC_LblCalcLot", x + 280, y + 155, "推奨LOT", 13, labelColor);
-    CreateLabel("PC_ValCalcLot", x + 420, y + 155, "---", 15, greenColor, "Arial Black");
-    
+    CreateLabel("PC_ValCalcRisk", x + 240, y + 155, "---", 13, redColor, "Arial Bold");
+
+    CreateLabel("PC_LblCalcLot", x + 430, y + 155, "推奨LOT", 13, labelColor);
+    CreateLabel("PC_ValCalcLot", x + 570, y + 145, "---", 15, greenColor, "Arial Black");
+
     // LOT計算ボタン
-    CreateButton("PC_BtnCalcLot", x + padding, y + 185, 200, 40, "LOT計算", greenColor);
-    
+    CreateButton("PC_BtnCalcLot", x + padding, y + 200, 200, 40, "LOT計算", greenColor);
+
     // マーケット注文ボタン
-    CreateButton("PC_BtnBuyMarket", x + 230, y + 185, 180, 40, "BUY 成行", blueColor);
-    CreateButton("PC_BtnSellMarket", x + 420, y + 185, 180, 40, "SELL 成行", redColor);
-    
+    CreateButton("PC_BtnBuyMarket", x + 230, y + 200, 180, 40, "BUY 成行", blueColor);
+    CreateButton("PC_BtnSellMarket", x + 420, y + 200, 180, 40, "SELL 成行", redColor);
+
     // 分割エントリー表示
-    CreateLabel("PC_LblSplitInfo", x + padding, y + 235, 
+    CreateLabel("PC_LblSplitInfo", x + padding, y + 255, 
                 "分割エントリー: " + (EnableSplitEntry ? "ON (" + IntegerToString(SplitCount) + "分割)" : "OFF"), 
                 11, labelColor);
-    
-    y += 250;
+
+    y += lotSectionHeight + sectionGap;
     
     // === ポジション管理セクション ===
-    CreateSection(x, y, width, 180, "ポジション管理", sectionBg);
-    
+    int manageSectionHeight = 210;
+    CreateSection(x, y, width, manageSectionHeight, "ポジション管理", sectionBg);
+
     // SL/TP一括変更
     CreateLabel("PC_LblModify", x + padding, y + 40, "既存ポジションのSL/TP一括変更", 12, labelColor);
     CreateButton("PC_BtnModifySL", x + padding, y + 65, 295, 35, "全ポジSL変更", orangeColor);
     CreateButton("PC_BtnModifyTP", x + 335, y + 65, 295, 35, "全ポジTP変更", orangeColor);
-    
+
     // 決済ボタン
     CreateButton("PC_BtnCloseAll", x + padding, y + 110, 295, 35, "全ポジション決済", redColor);
     CreateButton("PC_BtnBreakeven", x + 335, y + 110, 295, 35, "建値ストップ", blueColor);
-    
-    CreateButton("PC_BtnCloseProfit", x + padding, y + 150, 295, 35, "利益のみ決済", greenColor);
-    CreateButton("PC_BtnCloseLoss", x + 335, y + 150, 295, 35, "損失のみ決済", orangeColor);
-    
-    y += 190;
+
+    CreateButton("PC_BtnCloseProfit", x + padding, y + 155, 295, 35, "利益のみ決済", greenColor);
+    CreateButton("PC_BtnCloseLoss", x + 335, y + 155, 295, 35, "損失のみ決済", orangeColor);
+
+    y += manageSectionHeight + sectionGap;
     
     // === 操作方法 ===
-    CreateSection(x, y, width, 80, "操作方法", sectionBg);
+    int helpSectionHeight = 100;  // 80 → 100
+    CreateSection(x, y, width, helpSectionHeight, "操作方法", sectionBg);
     
-    CreateLabel("PC_Help1", x + padding, y + 35, 
+    CreateLabel("PC_Help1", x + padding, y + 40,   // y+35 → y+40
                 "• SL/TP pipsを入力してLOT計算 → 成行注文", 
                 11, labelColor);
-    CreateLabel("PC_Help2", x + padding, y + 55, 
+    CreateLabel("PC_Help2", x + padding, y + 65,   // y+55 → y+65
                 "• 自動決済: " + DoubleToString(AutoClosePips, 1) + "pips / " + 
                 DoubleToString(AutoCloseMoney, 0) + "円", 
                 11, labelColor);
@@ -651,31 +711,15 @@ void UpdateAccountInfo()
 {
     accountBalance = AccountInfoDouble(ACCOUNT_BALANCE);
     
-    if(accountBalance < 20000) {
-        currentPhase = 1;
-        currentRiskPercent = 7.0;
-        currentMaxRisk = MathMin(400, accountBalance * 0.07);
-    }
-    else if(accountBalance < 50000) {
-        currentPhase = 2;
-        currentRiskPercent = 6.0;
-        currentMaxRisk = MathMin(800, accountBalance * 0.06);
-    }
-    else if(accountBalance < 150000) {
-        currentPhase = 3;
-        currentRiskPercent = 5.0;
-        currentMaxRisk = MathMin(1500, accountBalance * 0.05);
-    }
-    else if(accountBalance < 500000) {
-        currentPhase = 4;
-        currentRiskPercent = 4.0;
-        currentMaxRisk = MathMin(3000, accountBalance * 0.04);
-    }
-    else {
-        currentPhase = 5;
-        currentRiskPercent = 3.0;
-        currentMaxRisk = MathMin(5000, accountBalance * 0.03);
-    }
+    PhaseInfo current = GetCurrentPhaseInfo(accountBalance);
+    
+    currentPhase = current.phase;
+    currentStage = current.stage;
+    currentRiskPercent = current.riskPercent;
+    
+    // 動的リスク計算
+    double calculatedRisk = accountBalance * (current.riskPercent / 100.0);
+    currentMaxRisk = MathMin(current.maxRisk, calculatedRisk);
 }
 
 //+------------------------------------------------------------------+
@@ -832,7 +876,11 @@ double CalculatePeriodProfit()
 void UpdatePanelData()
 {
     // アカウント情報
-    ObjectSetString(0, "PC_ValPhase", OBJPROP_TEXT, IntegerToString(currentPhase));
+    PhaseInfo current = GetCurrentPhaseInfo(accountBalance);
+    string badge = GetCurrentBadge();
+    
+    ObjectSetString(0, "PC_ValPhase", OBJPROP_TEXT, 
+                    badge + " " + current.phaseTitle + "-" + current.stageName);
     ObjectSetString(0, "PC_ValBalance", OBJPROP_TEXT, IntegerToString((int)accountBalance) + "円");
     ObjectSetString(0, "PC_ValRisk", OBJPROP_TEXT, DoubleToString(currentRiskPercent, 1) + "%");
     ObjectSetString(0, "PC_ValMaxRisk", OBJPROP_TEXT, IntegerToString((int)currentMaxRisk) + "円");
@@ -904,7 +952,6 @@ void UpdatePanelData()
     
     // ビジュアル要素の更新
     UpdateProgressBar("PC_PhaseProgress", GetPhaseProgress());
-    UpdateProgressBar("PC_RiskGauge", GetRiskUsageRate());
 }
 
 //+------------------------------------------------------------------+
@@ -1131,28 +1178,7 @@ void CreateProgressBar(string name, int x, int y, int w, int h, double percent,
 //+------------------------------------------------------------------+
 double GetPhaseProgress()
 {
-    double progress = 0;
-    
-    switch(currentPhase)
-    {
-        case 1:
-            progress = (accountBalance - 5000) / (20000 - 5000) * 100;
-            break;
-        case 2:
-            progress = (accountBalance - 20000) / (50000 - 20000) * 100;
-            break;
-        case 3:
-            progress = (accountBalance - 50000) / (150000 - 50000) * 100;
-            break;
-        case 4:
-            progress = (accountBalance - 150000) / (500000 - 150000) * 100;
-            break;
-        case 5:
-            progress = (accountBalance - 500000) / (1000000 - 500000) * 100;
-            break;
-    }
-    
-    return MathMax(0, MathMin(100, progress));
+    return GetSubPhaseProgress();
 }
 
 //+------------------------------------------------------------------+
@@ -1186,13 +1212,35 @@ double GetRiskUsageRate()
 //+------------------------------------------------------------------+
 void UpdateProgressBar(string name, double percent)
 {
-    // バーの幅を更新
+    // fillWidthが0の時の処理を追加
     string fillName = name + "_fill";
-    if(ObjectFind(0, fillName) >= 0)
+    string bgName = name + "_bg";
+    
+    if(ObjectFind(0, bgName) >= 0)
     {
-        int bgWidth = (int)ObjectGetInteger(0, name + "_bg", OBJPROP_XSIZE);
+        int bgWidth = (int)ObjectGetInteger(0, bgName, OBJPROP_XSIZE);
         int fillWidth = (int)(bgWidth * percent / 100);
-        ObjectSetInteger(0, fillName, OBJPROP_XSIZE, fillWidth);
+        
+        // fillが既に存在する場合は更新、存在しない場合は作成
+        if(ObjectFind(0, fillName) >= 0)
+        {
+            if(fillWidth > 0)
+            {
+                ObjectSetInteger(0, fillName, OBJPROP_XSIZE, fillWidth);
+            }
+            else
+            {
+                ObjectDelete(0, fillName);  // 0%の場合は削除
+            }
+        }
+        else if(fillWidth > 0)
+        {
+            // fillを新規作成
+            int bgX = (int)ObjectGetInteger(0, bgName, OBJPROP_XDISTANCE);
+            int bgY = (int)ObjectGetInteger(0, bgName, OBJPROP_YDISTANCE);
+            int bgH = (int)ObjectGetInteger(0, bgName, OBJPROP_YSIZE);
+            CreateRect(fillName, bgX, bgY, fillWidth, bgH, C'52,152,219');
+        }
     }
     
     // テキスト更新
@@ -1204,3 +1252,153 @@ void UpdateProgressBar(string name, double percent)
 }
 
 //+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//| 現在のフェーズ情報を取得                                         |
+//+------------------------------------------------------------------+
+PhaseInfo GetCurrentPhaseInfo(double balance)
+{
+    for(int i = 0; i < 15; i++)
+    {
+        if(balance >= phaseData[i].startBalance && balance < phaseData[i].endBalance)
+        {
+            return phaseData[i];
+        }
+    }
+    
+    // 最終段階を超えた場合
+    PhaseInfo finalPhase = phaseData[14];
+    finalPhase.stageName = "レジェンド";
+    return finalPhase;
+}
+
+//+------------------------------------------------------------------+
+//| サブフェーズの進捗率を取得                                       |
+//+------------------------------------------------------------------+
+double GetSubPhaseProgress()
+{
+    PhaseInfo current = GetCurrentPhaseInfo(accountBalance);
+    
+    if(accountBalance >= current.endBalance)
+        return 100.0;
+        
+    double progress = (accountBalance - current.startBalance) / 
+                     (current.endBalance - current.startBalance) * 100.0;
+    
+    return MathMax(0, MathMin(100, progress));
+}
+
+//+------------------------------------------------------------------+
+//| 全体の進捗率を取得                                               |
+//+------------------------------------------------------------------+
+double GetOverallProgress()
+{
+    double maxBalance = 3000000; // 最終目標
+    double progress = (accountBalance - 5000) / (maxBalance - 5000) * 100.0;
+    
+    return MathMax(0, MathMin(100, progress));
+}
+
+//+------------------------------------------------------------------+
+//| 次のマイルストーンまでの距離                                     |
+//+------------------------------------------------------------------+
+double GetNextMilestoneDistance()
+{
+    PhaseInfo current = GetCurrentPhaseInfo(accountBalance);
+    return current.endBalance - accountBalance;
+}
+
+//+------------------------------------------------------------------+
+//| 達成ポイントの計算                                               |
+//+------------------------------------------------------------------+
+int GetAchievementPoints()
+{
+    PhaseInfo current = GetCurrentPhaseInfo(accountBalance);
+    
+    // フェーズ × ステージで基本ポイント
+    int basePoints = current.phase * 100 + (current.stage + 1) * 10;
+    
+    // 進捗率ボーナス
+    double progress = GetSubPhaseProgress();
+    int progressBonus = (int)(progress / 10) * 5; // 10%ごとに5ポイント
+    
+    return basePoints + progressBonus;
+}
+
+//+------------------------------------------------------------------+
+//| 現在のバッジを取得                                               |
+//+------------------------------------------------------------------+
+string GetCurrentBadge()
+{
+    PhaseInfo current = GetCurrentPhaseInfo(accountBalance);
+    
+    int index = (current.phase - 1) * 3 + current.stage;
+    if(index < 15)
+        return badges[index];
+    
+    return "MAX";
+}
+
+//+------------------------------------------------------------------+
+//| レベルアップチェック                                             |
+//+------------------------------------------------------------------+
+bool CheckLevelUp(double oldBalance, double newBalance)
+{
+    PhaseInfo oldPhase = GetCurrentPhaseInfo(oldBalance);
+    PhaseInfo newPhase = GetCurrentPhaseInfo(newBalance);
+    
+    // サブフェーズが変わったかチェック
+    if(oldPhase.phase != newPhase.phase || oldPhase.stage != newPhase.stage)
+    {
+        string message = StringFormat(
+            "🎉 レベルアップ！\n%s %s 達成！\n獲得バッジ: %s\n進捗: %.1f%% → %.1f%%",
+            newPhase.phaseTitle,
+            newPhase.stageName,
+            GetCurrentBadge(),
+            (oldBalance - oldPhase.startBalance) / (oldPhase.endBalance - oldPhase.startBalance) * 100,
+            GetSubPhaseProgress()
+        );
+        
+        Alert(message);
+        Print(message);
+        return true;
+    }
+    
+    return false;
+}
+
+//+------------------------------------------------------------------+
+//| フェーズ詳細情報取得                                             |
+//+------------------------------------------------------------------+
+string GetPhaseDetails()
+{
+    PhaseInfo current = GetCurrentPhaseInfo(accountBalance);
+    double subProgress = GetSubPhaseProgress();
+    double overallProgress = GetOverallProgress();
+    int points = GetAchievementPoints();
+    
+    string details = StringFormat(
+        "=== フェーズ詳細 ===\n"
+        "%s %s - %s\n"
+        "サブ進捗: %.1f%% (¥%.0f/¥%.0f)\n"
+        "全体進捗: %.1f%% (最終目標: ¥3,000,000)\n"
+        "獲得ポイント: %d pt\n"
+        "次のマイルストーン: ¥%.0f (残り¥%.0f)\n"
+        "現在リスク設定: %.1f%% (上限¥%.0f)",
+        GetCurrentBadge(),
+        current.phaseTitle,
+        current.stageName,
+        subProgress,
+        accountBalance,
+        current.endBalance,
+        overallProgress,
+        points,
+        current.endBalance,
+        GetNextMilestoneDistance(),
+        currentRiskPercent,
+        currentMaxRisk
+    );
+    
+    return details;
+}
+
