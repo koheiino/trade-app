@@ -55,7 +55,7 @@ export default function RecordsPage() {
         .from('user_stats')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (stats) {
         setUserStats(stats);
@@ -68,7 +68,7 @@ export default function RecordsPage() {
         .select('*, trades(*)')
         .eq('user_id', user.id)
         .eq('date', today)
-        .single();
+        .maybeSingle();
 
       if (todayData) {
         setTodayEntry({
@@ -151,7 +151,7 @@ export default function RecordsPage() {
           checklist: todayEntry.checklist,
         })
         .select()
-        .single();
+        .maybeSingle();
 
       if (entryError) throw entryError;
 

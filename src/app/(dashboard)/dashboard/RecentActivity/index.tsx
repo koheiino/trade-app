@@ -1,4 +1,4 @@
-import type { TradeEntry } from '../../../types/dashboard';
+import type { TradeEntry } from '../../../../types/dashboard';
 
 interface RecentActivityProps {
   entries: TradeEntry[];
