@@ -10,7 +10,7 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        // URLからトークンを取得
+        // URLからトークンを取得して認証
         const {
           data: { session },
           error,
@@ -18,20 +18,54 @@ export default function AuthCallback() {
 
         if (error) {
           console.error('Error during auth callback:', error);
-          router.push('/');
+          router.push('/login');
           return;
         }
 
         if (session) {
-          // セッションがある場合、パスワード設定ページへ
-          router.push('/auth/set-password');
+          // ユーザー情報を確認
+          const { data: userStats } = await supabase
+            .from('user_stats')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .maybeSingle();
+
+          // 新規ユーザーの場合
+          if (!userStats) {
+            // user_statsを作成（基本情報も含めて）
+            await supabase.from('user_stats').insert({
+              user_id: session.user.id,
+              email: session.user.email,
+              current_balance: 5000,
+              current_phase: 1,
+              streak_days: 0,
+              timezone: 'Asia/Tokyo',
+              currency_pair: 'USD/JPY',
+              default_lot_size: 0.01,
+              theme: 'light',
+              language: 'ja',
+              settings: {
+                defaultStartAmount: 5000,
+                riskPercentage: 5,
+                enableEmailNotifications: true,
+                enableDailyReminder: false,
+                reminderTime: '09:00',
+              },
+            });
+
+            // パスワード設定ページへ
+            router.push('/auth/set-password');
+          } else {
+            // 既存ユーザーはダッシュボードへ
+            router.push('/');
+          }
         } else {
-          // セッションがない場合はホームへ
-          router.push('/');
+          // セッションがない場合はログインへ
+          router.push('/login');
         }
       } catch (error) {
         console.error('Unexpected error:', error);
-        router.push('/');
+        router.push('/login');
       }
     };
 

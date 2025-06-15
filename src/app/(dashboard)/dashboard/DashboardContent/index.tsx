@@ -1,8 +1,8 @@
-import QuickTradeInput from '../QuickTradeInput';
-import StatsGrid from '../StatsGrid';
-import ProgressTracker from '../ProgressTracker';
-import RecentActivity from '@/app/dashboard/RecentActivity';
-import type { DashboardData } from '../../../types/dashboard';
+import QuickTradeInput from '@/app/(dashboard)/dashboard/QuickTradeInput';
+import StatsGrid from '@/app/(dashboard)/dashboard/StatsGrid';
+import ProgressTracker from '@/app/(dashboard)/dashboard/ProgressTracker';
+import RecentActivity from '@/app/(dashboard)/dashboard/RecentActivity';
+import type { DashboardData } from '@/types/dashboard';
 
 interface DashboardContentProps {
   data: DashboardData;

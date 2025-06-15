@@ -37,9 +37,7 @@ export default function Header({ onMenuClick, title, subtitle }: HeaderProps) {
           >
             <Search className="w-5 h-5 text-gray-600" />
           </button>
-          <div
-            className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center"
-          >
+          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
             <User className="w-4 h-4 text-white" />
           </div>
         </div>

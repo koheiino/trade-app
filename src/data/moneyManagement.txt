@@ -1,0 +1,1894 @@
+//+------------------------------------------------------------------+
+//|                                      moneyManagement_v7.mq5      |
+//|                                  Copyright 2024, TraderAssistant |
+//+------------------------------------------------------------------+
+#property copyright "Copyright 2024, TraderAssistant"
+#property version   "7.00"
+#property description "TraderAssistant - Pips Based Version"
+
+#include <Trade\Trade.mqh>
+#include <Trade\PositionInfo.mqh>
+#include <Trade\DealInfo.mqh>
+#include <Trade\HistoryOrderInfo.mqh>
+
+//--- 入力パラメータ
+input group "=== 基本設定 ==="
+input double   DefaultRRRatio = 5.0;        // デフォルトRR比
+input bool     EnableSplitEntry = true;     // 分割エントリー
+input int      SplitCount = 2;              // 分割数
+input int      DailyTradeLimit = 4;         // 日次トレード上限
+
+input group "=== 自動決済設定 ==="
+input bool     EnableAutoClose = true;      // 自動決済を有効化
+input double   AutoClosePips = 200.0;       // 合計獲得pips（自動決済）
+input double   AutoCloseMoney = 3000.0;     // 合計獲得金額（自動決済）
+input bool     CloseOnlyProfit = true;      // 利益ポジションのみ決済
+
+input group "=== パネル設定 ==="
+input int      PanelPosX = 20;             // パネルX位置
+input int      PanelPosY = 50;             // パネルY位置
+
+//--- グローバル変数
+CTrade trade;
+CPositionInfo position;
+CDealInfo deal;
+enum PHASE_STAGE
+{
+    STAGE_EARLY = 0,    // 序盤
+    STAGE_MID = 1,      // 中盤
+    STAGE_LATE = 2      // 終盤
+};
+
+struct PhaseInfo
+{
+    int phase;
+    int stage;
+    double startBalance;
+    double endBalance;
+    string stageName;
+    string phaseTitle;
+    double riskPercent;
+    double maxRisk;
+};
+
+int currentStage;
+PhaseInfo phaseData[15] = {
+    // Phase 1: 初心者期 (5K-20K) - 学習重視
+    {1, STAGE_EARLY, 5000, 8000, "初級", "P1", 8.0, 400},      // 8%（最大400円）
+    {1, STAGE_MID, 8000, 12000, "中級", "P1", 7.0, 560},       // 7%（最大560円）
+    {1, STAGE_LATE, 12000, 20000, "上級", "P1", 6.0, 720},     // 6%（最大720円）
+    
+    // Phase 2: 成長期 (20K-50K) - バランス重視
+    {2, STAGE_EARLY, 20000, 28000, "初級", "P2", 5.0, 1000},   // 5%（最大1000円）
+    {2, STAGE_MID, 28000, 38000, "中級", "P2", 4.5, 1260},     // 4.5%（最大1260円）
+    {2, STAGE_LATE, 38000, 50000, "上級", "P2", 4.0, 1520},    // 4%（最大1520円）
+    
+    // Phase 3: 安定期 (50K-200K) - 着実な成長
+    {3, STAGE_EARLY, 50000, 80000, "初級", "P3", 3.5, 1750},    // 3.5%
+    {3, STAGE_MID, 80000, 130000, "中級", "P3", 3.0, 2400},     // 3%
+    {3, STAGE_LATE, 130000, 200000, "上級", "P3", 2.5, 3250},   // 2.5%
+    
+    // Phase 4: プロ期 (200K-1M) - リスク管理重視
+    {4, STAGE_EARLY, 200000, 400000, "初級", "P4", 2.0, 4000},   // 2%
+    {4, STAGE_MID, 400000, 700000, "中級", "P4", 1.8, 7200},     // 1.8%
+    {4, STAGE_LATE, 700000, 1000000, "上級", "P4", 1.5, 10500}, // 1.5%
+    
+    // Phase 5: マスター期 (1M以上) - 資産保全重視
+    {5, STAGE_EARLY, 1000000, 2000000, "初級", "P5", 1.2, 12000},  // 1.2%
+    {5, STAGE_MID, 2000000, 3000000, "中級", "P5", 1.0, 20000},    // 1.0%
+    {5, STAGE_LATE, 3000000, 5000000, "上級", "P5", 0.8, 24000},   // 0.8%
+};
+string badges[15] = {
+    "Lv1", "Lv2", "Lv3",      // Phase 1
+    "Lv4", "Lv5", "Lv6",      // Phase 2  
+    "Lv7", "Lv8", "Lv9",      // Phase 3
+    "Lv10", "Lv11", "Lv12",   // Phase 4
+    "Lv13", "Lv14", "Lv15"    // Phase 5
+};
+
+static double lastBalance = 0; // レベルアップチェック用
+double accountBalance, currentRiskPercent, currentMaxRisk;
+int currentPhase;
+
+// LOT計算用変数
+double inputSLPips = 20.0;      // デフォルトSL pips
+double inputTPPips = 100.0;     // デフォルトTP pips
+double inputRiskAmount = 0.0;   // 手動入力リスク額
+double inputRiskPercent = 0.0;  // 手動入力リスク率
+double calculatedLot = 0.0;
+double riskAmount = 0.0;
+double recommendedRiskAmount = 0.0; // 推奨リスク額
+
+// ポジション管理
+double totalProfit = 0;
+double totalPips = 0;
+int positionCount = 0;
+
+// 日次管理
+int todayTradeCount = 0;
+double todayProfit = 0;
+datetime lastDayCheck = 0;
+
+// 統計管理
+struct TradeStats {
+    int totalTrades;
+    int winTrades;
+    double totalWinAmount;    // 追加：総利益
+    double totalLossAmount;   // 追加：総損失
+    double avgWinAmount;      // 追加：平均利益
+    double avgLossAmount;     // 追加：平均損失
+    double profitFactor;      // 追加：プロフィットファクター
+    double realRRR;           // 追加：実績RRR（平均利益÷平均損失）
+    double weeklyProfit;
+    double monthlyProfit;
+};
+TradeStats stats;
+
+// エディットボックス名
+string slPipsEditName = "PC_EditSLPips";
+string tpPipsEditName = "PC_EditTPPips";
+string riskAmountEditName = "PC_EditRiskAmount";
+string riskPercentEditName = "PC_EditRiskPercent";
+
+struct TradeScore {
+    // A. 収益性スコア（300点）
+    double winRateScore;        // 勝率スコア (0-100)
+    double rrScore;             // RR比スコア (0-100)
+    double expectancyScore;     // 期待値スコア (0-100)
+    
+    // B. リスク管理スコア（300点）
+    double ruleComplianceScore; // ルール遵守スコア (0-100)
+    double drawdownScore;       // ドローダウン管理スコア (0-100)
+    double moneyManageScore;    // 資金管理スコア (0-100)
+    
+    // C. 一貫性スコア（100点）
+    double consistencyScore;    // 成績安定性スコア (0-100)
+    
+    // D. 成長スコア（200点）
+    double skillScore;          // スキル向上スコア (0-100)
+    double progressScore;       // フェーズ進捗スコア (0-100)
+    
+    // ボーナス・ペナルティ
+    double bonusPoints;         // ボーナスポイント
+    double penaltyPoints;       // ペナルティポイント
+    
+    // 総合スコア
+    double totalScore;          // 総合スコア（1000点満点）
+    string rank;                // ランク（S+～C）
+    
+    // 履歴データ（トレンド分析用）
+    double prevWeekScore;       // 前週スコア
+    double prevMonthScore;      // 前月スコア
+    double maxDrawdown;         // 最大ドローダウン
+    int ruleViolations;         // ルール違反回数
+    int consecutiveLosses;      // 連敗数
+    double lastLotSize;         // 前回のロットサイズ
+};
+TradeScore tradeScore;
+
+int totalTradesThisWeek = 0;
+int totalTradesThisMonth = 0;
+
+color bgColor = C'25,27,30';
+color sectionBg = C'35,37,40';
+color headerBg = C'45,55,72';
+color textColor = C'220,220,220';
+color labelColor = C'160,160,160';
+color greenColor = C'76,175,80';
+color redColor = C'244,67,54';
+color blueColor = C'33,150,243';
+color orangeColor = C'255,152,0';
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+    trade.SetExpertMagicNumber(123456);
+    CreateEnhancedPanel();
+    LoadTradeStats();
+    UpdateAll();
+    EventSetTimer(1);
+    return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Expert deinitialization function                                 |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+    EventKillTimer();
+    ObjectsDeleteAll(0, "PC_");
+    SaveTradeStats();
+}
+
+//+------------------------------------------------------------------+
+//| Timer function                                                   |
+//+------------------------------------------------------------------+
+void OnTimer()
+{
+    UpdateAll();
+    CheckAutoClose();
+    CheckDailyReset();
+    // レベルアップチェック
+    if(lastBalance > 0)
+    {
+        CheckLevelUp(lastBalance, accountBalance);
+    }
+    lastBalance = accountBalance;
+}
+
+//+------------------------------------------------------------------+
+//| Trade function                                                   |
+//+------------------------------------------------------------------+
+void OnTrade()
+{
+    UpdatePositionInfo();
+}
+
+//+------------------------------------------------------------------+
+//| ChartEvent function                                              |
+//+------------------------------------------------------------------+
+void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
+{
+    // ボタンクリックイベント
+    if(id == CHARTEVENT_OBJECT_CLICK)
+    {
+        // LOT計算関連
+        if(sparam == "PC_BtnCalcLot") { CalculateLotFromPips(); UpdateAll(); }
+        else if(sparam == "PC_BtnBuyMarket") ExecuteMarketOrder(true);
+        else if(sparam == "PC_BtnSellMarket") ExecuteMarketOrder(false);
+        
+        // ポジション管理ボタン
+        else if(sparam == "PC_BtnCloseAll") CloseAllPositions();
+        else if(sparam == "PC_BtnCloseProfit") CloseProfitPositions();
+        else if(sparam == "PC_BtnCloseLoss") CloseLossPositions();
+        else if(sparam == "PC_BtnBreakeven") MoveAllToBreakeven();
+        else if(sparam == "PC_BtnModifySL") ModifyAllPositionsSL();
+        else if(sparam == "PC_BtnModifyTP") ModifyAllPositionsTP();
+    }
+    
+    // エディットボックスの値変更
+    if(id == CHARTEVENT_OBJECT_ENDEDIT)
+    {
+        if(sparam == slPipsEditName || sparam == tpPipsEditName || 
+           sparam == riskAmountEditName || sparam == riskPercentEditName)
+        {
+            ReadPipsInput();
+        }
+    }
+}
+
+//+------------------------------------------------------------------+
+//| 拡張版パネル作成                                                 |
+//+------------------------------------------------------------------+
+void CreateEnhancedPanel()
+{
+    int x = PanelPosX;
+    int y = PanelPosY;
+    int width = 850;
+    int lineHeight = 55;      // 50 → 55
+    int sectionGap = 35;      // 30 → 40（セクション間の余白を増加）
+    int padding = 20;
+
+
+    // メイン背景（高さを大幅に増加）
+    CreateRect("PC_MainBg", x, y, width, 1500, bgColor);
+    
+    // ヘッダー
+    CreateRect("PC_Header", x, y, width, 60, headerBg);
+    CreateLabel("PC_Title", x + width/2, y + 20, "Management System", 
+                16, clrWhite, "Arial Bold", ANCHOR_CENTER);
+    
+    y += 70;  // 65 → 70
+    
+    // === アカウント情報セクション ===
+    int accountSectionHeight = 160;  // 140 → 160
+    CreateSection(x, y, width, accountSectionHeight, "アカウント情報", sectionBg);
+    
+    // 内容の配置（Y座標を調整してセクション内に収める）
+    CreateLabel("PC_LblPhase", x + padding, y + 55, "Phase", 12, labelColor);
+    CreateLabel("PC_ValPhase", x + 130, y + 55, "1", 12, greenColor, "Arial Bold");
+    
+    CreateLabel("PC_LblBalance", x + 350, y + 55, "残高", 12, labelColor);
+    CreateLabel("PC_ValBalance", x + 500, y + 55, "0円", 12, textColor, "Arial Bold");
+    
+    CreateLabel("PC_LblRisk", x + padding, y + 100, "Risk", 12, labelColor);
+    CreateLabel("PC_ValRisk", x + 110, y + 100, "0%", 12, redColor, "Arial Bold");
+    
+    CreateLabel("PC_LblMaxRisk", x + 250, y + 100, "Max Risk", 12, labelColor);
+    CreateLabel("PC_ValMaxRisk", x + 420, y + 100, "0円", 12, redColor, "Arial Bold");
+    
+    // プログレスバー（セクション内に収まるよう調整）
+      CreateLabel("PC_PhaseProgressLabel", x + 620, y + 15, "サブフェーズ進捗", 10, labelColor);
+    CreateProgressBar("PC_PhaseProgress", x + 620, y + 55, 180, 25,
+                      GetSubPhaseProgress(), C'52,152,219', C'60,60,60');
+    
+    CreateLabel("PC_OverallProgressLabel", x + 620, y + 125, "全体進捗", 9, labelColor);
+    CreateProgressBar("PC_OverallProgress", x + 620, y + 100, 180, 20,
+                      GetOverallProgress(), C'76,175,80', C'60,60,60');
+    
+    y += accountSectionHeight + sectionGap;
+    
+    // === 日次管理セクション ===
+    int dailySectionHeight = 150;  // 120 → 150
+    CreateSection(x, y, width, dailySectionHeight, "日次管理", sectionBg);
+    
+    CreateLabel("PC_LblTodayTrades", x + padding, y + 55, "本日取引", 12, labelColor);
+    CreateLabel("PC_ValTodayTrades", x + 200, y + 55, "0/3", 12, blueColor, "Arial Bold");
+    
+    CreateLabel("PC_LblTodayPL", x + 280, y + 55, "日次損益", 12, labelColor);
+    CreateLabel("PC_ValTodayPL", x + 480, y + 55, "0円", 12, textColor, "Arial Bold");
+    
+    CreateLabel("PC_LblTradeStatus", x + padding, y + 100, "取引状態", 12, labelColor);
+    CreateLabel("PC_ValTradeStatus", x + 160, y + 100, "取引可能", 12, greenColor, "Arial Bold");
+    
+    y += dailySectionHeight + sectionGap;
+    
+    // === ポジション状況セクション ===
+    int positionSectionHeight = 150;  // 120 → 150
+    CreateSection(x, y, width, positionSectionHeight, "ポジション状況", sectionBg);
+    
+    CreateLabel("PC_LblPosCount", x + padding, y + 55, "保有数", 12, labelColor);
+    CreateLabel("PC_ValPosCount", x + 140, y + 55, "0", 12, textColor, "Arial Bold");
+    
+    CreateLabel("PC_LblPL", x + 200, y + 55, "損益", 12, labelColor);
+    CreateLabel("PC_ValPL", x + 280, y + 55, "0円", 12, textColor, "Arial Bold");
+    
+    CreateLabel("PC_LblPips", x + padding, y + 100, "Pips", 12, labelColor);
+    CreateLabel("PC_ValPips", x + 100, y + 100, "0.0", 12, textColor, "Arial Bold");
+    
+    CreateLabel("PC_LblAuto", x + 200, y + 100, "自動決済", 12, labelColor);
+    CreateLabel("PC_ValAuto", x + 380, y + 100, "OFF", 12, greenColor, "Arial Bold");
+    
+    y += positionSectionHeight + sectionGap;
+    
+    // === 統計情報セクション ===
+    int statsSectionHeight = 200;  // 高さを増加
+    CreateSection(x, y, width, statsSectionHeight, "今週の統計情報", sectionBg);
+
+    // 1行目：勝率とプロフィットファクター
+    CreateLabel("PC_LblWinRate", x + padding, y + 40, "勝率", 12, labelColor);
+    CreateLabel("PC_ValWinRate", x + 120, y + 40, "0%", 12, blueColor, "Arial Bold");
+
+    CreateLabel("PC_LblPF", x + 220, y + 40, "PF", 12, labelColor);
+    CreateLabel("PC_ValPF", x + 280, y + 40, "0.00", 12, greenColor, "Arial Bold");
+
+    CreateLabel("PC_LblRRR", x + 400, y + 40, "実績RRR", 12, labelColor);
+    CreateLabel("PC_ValRRR", x + 550, y + 40, "0.00", 12, blueColor, "Arial Bold");
+
+    // 2行目：総損益
+    CreateLabel("PC_LblTotalWin", x + padding, y + 75, "総利益", 12, labelColor);
+    CreateLabel("PC_ValTotalWin", x + 130, y + 75, "0円", 11, greenColor);
+
+    CreateLabel("PC_LblTotalLoss", x + 280, y + 75, "総損失", 12, labelColor);
+    CreateLabel("PC_ValTotalLoss", x + 390, y + 75, "0円", 11, redColor);
+
+    // 3行目：週次損益と変化率
+    CreateLabel("PC_LblWeekly", x + padding, y + 110, "週次損益", 12, labelColor);
+    CreateLabel("PC_ValWeekly", x + 160, y + 110, "0円", 12, textColor, "Arial Bold");
+
+    CreateLabel("PC_LblWeeklyPercent", x + 280, y + 110, "週次%", 12, labelColor);
+    CreateLabel("PC_ValWeeklyPercent", x + 380, y + 110, "0.0%", 12, textColor, "Arial Bold");
+
+    // 4行目：月次損益と変化率
+    CreateLabel("PC_LblMonthly", x + padding, y + 145, "月次損益", 12, labelColor);
+    CreateLabel("PC_ValMonthly", x + 160, y + 145, "0円", 12, textColor, "Arial Bold");
+
+    CreateLabel("PC_LblMonthlyPercent", x + 280, y + 145, "月次%", 12, labelColor);
+    CreateLabel("PC_ValMonthlyPercent", x + 380, y + 145, "0.0%", 12, textColor, "Arial Bold");
+
+    y += statsSectionHeight + sectionGap;
+    
+    // === LOT計算セクション ===
+    int lotSectionHeight = 280;
+    CreateSection(x, y, width, lotSectionHeight, "LOT計算", sectionBg);
+
+    // SL pips入力
+    CreateLabel("PC_LblSLPips", x + padding, y + 40, "S/L pips", 13, labelColor);
+    CreateEditBox(slPipsEditName, x + 160, y + 45, 100, 30, 
+                DoubleToString(inputSLPips, 1), 14, textColor, sectionBg);
+
+    // TP pips入力
+    CreateLabel("PC_LblTPPips", x + 280, y + 40, "T/P pips", 13, labelColor);
+    CreateEditBox(tpPipsEditName, x + 430, y + 45, 100, 30, 
+                DoubleToString(inputTPPips, 1), 14, textColor, sectionBg);
+
+    // リスク額入力
+    CreateLabel("PC_LblRiskAmount", x + padding, y + 85, "損失額", 13, labelColor);
+    CreateEditBox(riskAmountEditName, x + 160, y + 90, 100, 30, 
+                "0", 14, textColor, sectionBg);
+    CreateLabel("PC_LblRiskAmountYen", x + 255, y + 90, "円", 13, labelColor);
+
+    // リスク率入力
+    CreateLabel("PC_LblRiskPercent", x + 300, y + 85, "損失率", 13, labelColor);
+    CreateEditBox(riskPercentEditName, x + 420, y + 95, 100, 30, 
+                "0", 14, textColor, sectionBg);
+    CreateLabel("PC_LblRiskPercentMark", x + 485, y + 85, "%", 13, labelColor);
+
+    // 推奨値表示
+    CreateLabel("PC_LblRecommend", x + padding, y + 125, "推奨リスク", 13, labelColor);
+    CreateLabel("PC_ValRecommend", x + 220, y + 125, "---", 12, C'100,150,250', "Arial");
+
+    // 計算結果表示
+    CreateLabel("PC_LblCalcRisk", x + padding, y + 155, "使用リスク額", 13, labelColor);
+    CreateLabel("PC_ValCalcRisk", x + 240, y + 155, "---", 13, redColor, "Arial Bold");
+
+    CreateLabel("PC_LblCalcLot", x + 430, y + 155, "推奨LOT", 13, labelColor);
+    CreateLabel("PC_ValCalcLot", x + 570, y + 145, "---", 15, greenColor, "Arial Black");
+
+    // LOT計算ボタン
+    CreateButton("PC_BtnCalcLot", x + padding, y + 200, 200, 40, "LOT計算", greenColor);
+
+    // マーケット注文ボタン
+    CreateButton("PC_BtnBuyMarket", x + 230, y + 200, 180, 40, "BUY 成行", blueColor);
+    CreateButton("PC_BtnSellMarket", x + 420, y + 200, 180, 40, "SELL 成行", redColor);
+
+    // 分割エントリー表示
+    CreateLabel("PC_LblSplitInfo", x + padding, y + 255, 
+                "分割エントリー: " + (EnableSplitEntry ? "ON (" + IntegerToString(SplitCount) + "分割)" : "OFF"), 
+                11, labelColor);
+
+    y += lotSectionHeight + sectionGap;
+    
+    // === ポジション管理セクション ===
+    int manageSectionHeight = 210;
+    CreateSection(x, y, width, manageSectionHeight, "ポジション管理", sectionBg);
+
+    // SL/TP一括変更
+    CreateLabel("PC_LblModify", x + padding, y + 40, "既存ポジションのSL/TP一括変更", 12, labelColor);
+    CreateButton("PC_BtnModifySL", x + padding, y + 65, 295, 35, "全ポジSL変更", orangeColor);
+    CreateButton("PC_BtnModifyTP", x + 335, y + 65, 295, 35, "全ポジTP変更", orangeColor);
+
+    // 決済ボタン
+    CreateButton("PC_BtnCloseAll", x + padding, y + 110, 295, 35, "全ポジション決済", redColor);
+    CreateButton("PC_BtnBreakeven", x + 335, y + 110, 295, 35, "建値ストップ", blueColor);
+
+    CreateButton("PC_BtnCloseProfit", x + padding, y + 155, 295, 35, "利益のみ決済", greenColor);
+    CreateButton("PC_BtnCloseLoss", x + 335, y + 155, 295, 35, "損失のみ決済", orangeColor);
+
+    y += manageSectionHeight + sectionGap;
+
+
+    // === トレードスコアセクション ===
+    int scoreSectionHeight = 260;
+    CreateSection(x, y, width, scoreSectionHeight, "トレードスコア評価", sectionBg);
+    // スコア表示エリア
+    // 総合スコアとランク
+    CreateLabel("PC_LblTotalScore", x + padding, y + 40, "総合スコア", 14, labelColor);
+    CreateLabel("PC_ValTotalScore", x + 224, y + 30, "---", 16, clrWhite, "Arial Black");
+    CreateLabel("PC_ValRank", x + 424, y + 30, "---", 16, C'255,215,0', "Arial Black");
+
+    // 各カテゴリスコア（2列表示）
+    // 左列
+    CreateLabel("PC_LblProfitScore", x + padding, y + 80, "収益性", 11, labelColor);
+    CreateLabel("PC_ValProfitScore", x + 120, y + 80, "---/200", 11, textColor, "Arial Bold");
+
+    CreateLabel("PC_LblRiskScore", x + padding, y + 110, "リスク管理", 11, labelColor);
+    CreateLabel("PC_ValRiskScore", x + 180, y + 110, "---/300", 11, textColor, "Arial Bold");
+
+    CreateLabel("PC_LblConsistScore", x + padding, y + 140, "一貫性", 11, labelColor);
+    CreateLabel("PC_ValConsistScore", x + 120, y + 140, "---/100", 11, textColor, "Arial Bold");
+
+    CreateLabel("PC_LblGrowthScore", x + padding, y + 170, "成長性", 11, labelColor);
+    CreateLabel("PC_ValGrowthScore", x + 120, y + 170, "---/200", 11, textColor, "Arial Bold");
+
+    // 右列（詳細スコア）
+    CreateLabel("PC_LblScoreDetails", x + 340, y + 80, "詳細評価", 11, labelColor);
+    CreateLabel("PC_LblWinRateS", x + 380, y + 110, "勝率:", 10, labelColor);
+    CreateLabel("PC_ValWinRateS", x + 450, y + 110, "---", 10, textColor);
+
+    CreateLabel("PC_LblRRS", x + 380, y + 140, "PF:", 10, labelColor);
+    CreateLabel("PC_ValRRS", x + 450, y + 140, "---", 10, textColor);
+
+    CreateLabel("PC_LblExpectS", x + 250, y + 170, "期待値:", 10, labelColor);
+    CreateLabel("PC_ValExpectS", x + 340, y + 170, "---", 10, textColor);
+
+    CreateLabel("PC_LblComplianceS", x + 380, y + 170, "遵守率:", 10, labelColor);
+    CreateLabel("PC_ValComplianceS", x + 470, y + 170, "---", 10, textColor);
+
+    // ボーナスペナルティ表示
+    CreateLabel("PC_LblBonus", x + padding, y + 200, "ボーナス", 11, greenColor);
+    CreateLabel("PC_ValBonus", x + 140, y + 200, "+0", 11, greenColor, "Arial Bold");
+
+    CreateLabel("PC_LblPenalty", x + 200, y + 200, "ペナルティ", 11, redColor);
+    CreateLabel("PC_ValPenalty", x + 340, y + 200, "-0", 11, redColor, "Arial Bold");
+
+    // スコアトレンド
+    CreateLabel("PC_LblTrend", x + padding, y + 230, "スコア評価", 11, labelColor);
+    CreateLabel("PC_ValTrend", x + 220, y + 230, "---", 11, textColor);
+
+    // プログレスバー（スコアビジュアル）
+    CreateProgressBarNoText("PC_ScoreProgress", x + 480, y + 40, 180, 30,
+                  0, C'255,215,0', C'60,60,60');
+
+   // パーセント表示を別途追加
+     CreateLabel("PC_ScorePercent", x + 690, y + 40, "0%", 14, clrWhite, "Arial Bold");
+
+    y += scoreSectionHeight + sectionGap;
+
+    // === 操作方法 ===
+    int helpSectionHeight = 100;  // 80 → 100
+    CreateSection(x, y, width, helpSectionHeight, "操作方法", sectionBg);
+    
+    CreateLabel("PC_Help1", x + padding, y + 40,   // y+35 → y+40
+                "• SL/TP pipsを入力してLOT計算 → 成行注文", 
+                11, labelColor);
+    CreateLabel("PC_Help2", x + padding, y + 65,   // y+55 → y+65
+                "• 自動決済: " + DoubleToString(AutoClosePips, 1) + "pips / " + 
+                DoubleToString(AutoCloseMoney, 0) + "円", 
+                11, labelColor);
+}
+
+//+------------------------------------------------------------------+
+//| エディットボックス作成                                           |
+//+------------------------------------------------------------------+
+void CreateEditBox(string name, int x, int y, int w, int h, string text, 
+                   int fontSize, color textColor, color bgColor)
+{
+    ObjectCreate(0, name, OBJ_EDIT, 0, 0, 0);
+    ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
+    ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
+    ObjectSetInteger(0, name, OBJPROP_XSIZE, w);
+    ObjectSetInteger(0, name, OBJPROP_YSIZE, h);
+    ObjectSetString(0, name, OBJPROP_TEXT, text);
+    ObjectSetInteger(0, name, OBJPROP_FONTSIZE, fontSize);
+    ObjectSetInteger(0, name, OBJPROP_COLOR, textColor);
+    ObjectSetInteger(0, name, OBJPROP_BGCOLOR, bgColor);
+    ObjectSetInteger(0, name, OBJPROP_BORDER_COLOR, C'100,100,100');
+    ObjectSetInteger(0, name, OBJPROP_ALIGN, ALIGN_CENTER);
+}
+
+//+------------------------------------------------------------------+
+//| Pips入力値読み取り                                               |
+//+------------------------------------------------------------------+
+void ReadPipsInput()
+{
+    string slText = ObjectGetString(0, slPipsEditName, OBJPROP_TEXT);
+    string tpText = ObjectGetString(0, tpPipsEditName, OBJPROP_TEXT);
+    string riskAmountText = ObjectGetString(0, riskAmountEditName, OBJPROP_TEXT);
+    string riskPercentText = ObjectGetString(0, riskPercentEditName, OBJPROP_TEXT);
+    
+    inputSLPips = StringToDouble(slText);
+    inputTPPips = StringToDouble(tpText);
+    inputRiskAmount = StringToDouble(riskAmountText);
+    inputRiskPercent = StringToDouble(riskPercentText);
+    
+    // 値の検証
+    if(inputSLPips <= 0) inputSLPips = 20.0;
+    if(inputTPPips <= 0) inputTPPips = 100.0;
+    if(inputRiskAmount < 0) inputRiskAmount = 0;
+    if(inputRiskPercent < 0) inputRiskPercent = 0;
+}
+
+//+------------------------------------------------------------------+
+//| Pipsベースでのロット計算                                         |
+//+------------------------------------------------------------------+
+void CalculateLotFromPips()
+{
+    ReadPipsInput();
+    
+    // 推奨リスク額の計算（表示用）
+    recommendedRiskAmount = MathMin(accountBalance * currentRiskPercent / 100, currentMaxRisk);
+    recommendedRiskAmount = recommendedRiskAmount / DailyTradeLimit;
+    
+    // 前日マイナス時の推奨値調整
+    if(todayProfit < 0) {
+        recommendedRiskAmount = recommendedRiskAmount / 2;
+    }
+    
+    // 実際に使用するリスク額の決定
+    if(inputRiskAmount > 0) {
+        // 手動入力額を優先
+        riskAmount = inputRiskAmount;
+    }
+    else if(inputRiskPercent > 0) {
+        // 手動入力率から計算
+        riskAmount = accountBalance * inputRiskPercent / 100;
+    }
+    else {
+        // どちらも入力されていない場合は推奨値を使用
+        riskAmount = recommendedRiskAmount;
+        Alert("リスク額が入力されていないため、推奨値を使用します: " + 
+              IntegerToString((int)riskAmount) + "円");
+    }
+    
+    // ロット計算
+    double tickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+    double tickSize = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
+    double onePipValue = tickValue * 10;
+    
+    calculatedLot = riskAmount / (inputSLPips * onePipValue);
+    
+    // ロット調整
+    double minLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+    double maxLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
+    double lotStep = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+    
+    calculatedLot = MathFloor(calculatedLot / lotStep) * lotStep;
+    calculatedLot = MathMax(minLot, MathMin(maxLot, calculatedLot));
+    
+    Comment("LOT計算完了: " + DoubleToString(calculatedLot, 2) + 
+            " (SL: " + DoubleToString(inputSLPips, 1) + "pips, " +
+            "TP: " + DoubleToString(inputTPPips, 1) + "pips, " +
+            "リスク: " + IntegerToString((int)riskAmount) + "円)");
+}
+
+//+------------------------------------------------------------------+
+//| 成行注文実行                                                     |
+//+------------------------------------------------------------------+
+void ExecuteMarketOrder(bool isBuy)
+{
+    // 日次上限チェック
+    if(todayTradeCount >= DailyTradeLimit) {
+        Alert("日次トレード上限に達しています");
+        return;
+    }
+    
+    if(calculatedLot == 0) {
+        Alert("先にLOT計算してください");
+        return;
+    }
+    
+    double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+    
+    double sl, tp;
+    
+    if(EnableSplitEntry && SplitCount > 1)
+    {
+        double lotPerTrade = calculatedLot / SplitCount;
+        for(int i = 0; i < SplitCount; i++)
+        {
+            if(isBuy)
+            {
+                sl = ask - inputSLPips * point * 10;
+                tp = ask + inputTPPips * point * 10;
+                trade.Buy(lotPerTrade, _Symbol, 0, sl, tp, 
+                         "Split " + IntegerToString(i+1) + "/" + IntegerToString(SplitCount));
+            }
+            else
+            {
+                sl = bid + inputSLPips * point * 10;
+                tp = bid - inputTPPips * point * 10;
+                trade.Sell(lotPerTrade, _Symbol, 0, sl, tp,
+                          "Split " + IntegerToString(i+1) + "/" + IntegerToString(SplitCount));
+            }
+        }
+    }
+    else
+    {
+        if(isBuy)
+        {
+            sl = ask - inputSLPips * point * 10;
+            tp = ask + inputTPPips * point * 10;
+            trade.Buy(calculatedLot, _Symbol, 0, sl, tp);
+        }
+        else
+        {
+            sl = bid + inputSLPips * point * 10;
+            tp = bid - inputTPPips * point * 10;
+            trade.Sell(calculatedLot, _Symbol, 0, sl, tp);
+        }
+    }
+    
+    todayTradeCount++;
+    if(stats.totalTrades > 0 && stats.winTrades == 0) {
+        tradeScore.consecutiveLosses++;
+    } else {
+        tradeScore.consecutiveLosses = 0;
+    }
+    tradeScore.lastLotSize = calculatedLot;
+    calculatedLot = 0; // リセット
+}
+
+//+------------------------------------------------------------------+
+//| 全ポジションのSL変更                                             |
+//+------------------------------------------------------------------+
+void ModifyAllPositionsSL()
+{
+    ReadPipsInput();
+    int modified = 0;
+    double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+    
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        if(position.SelectByIndex(i))
+        {
+            if(position.Symbol() == _Symbol)
+            {
+                double newSL;
+                double currentPrice = position.PriceCurrent();
+                
+                if(position.PositionType() == POSITION_TYPE_BUY)
+                {
+                    newSL = currentPrice - inputSLPips * point * 10;
+                }
+                else
+                {
+                    newSL = currentPrice + inputSLPips * point * 10;
+                }
+                
+                if(trade.PositionModify(position.Ticket(), newSL, position.TakeProfit()))
+                    modified++;
+            }
+        }
+    }
+    
+    if(modified > 0)
+        Alert(IntegerToString(modified) + " ポジションのSLを" + 
+              DoubleToString(inputSLPips, 1) + "pipsに変更しました");
+}
+
+//+------------------------------------------------------------------+
+//| 全ポジションのTP変更                                             |
+//+------------------------------------------------------------------+
+void ModifyAllPositionsTP()
+{
+    ReadPipsInput();
+    int modified = 0;
+    double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+    
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        if(position.SelectByIndex(i))
+        {
+            if(position.Symbol() == _Symbol)
+            {
+                double newTP;
+                double openPrice = position.PriceOpen();
+                
+                if(position.PositionType() == POSITION_TYPE_BUY)
+                {
+                    newTP = openPrice + inputTPPips * point * 10;
+                }
+                else
+                {
+                    newTP = openPrice - inputTPPips * point * 10;
+                }
+                
+                if(trade.PositionModify(position.Ticket(), position.StopLoss(), newTP))
+                    modified++;
+            }
+        }
+    }
+    
+    if(modified > 0)
+        Alert(IntegerToString(modified) + " ポジションのTPを" + 
+              DoubleToString(inputTPPips, 1) + "pipsに変更しました");
+}
+
+//+------------------------------------------------------------------+
+//| 矩形作成                                                         |
+//+------------------------------------------------------------------+
+void CreateRect(string name, int x, int y, int w, int h, color clr)
+{
+    ObjectCreate(0, name, OBJ_RECTANGLE_LABEL, 0, 0, 0);
+    ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
+    ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
+    ObjectSetInteger(0, name, OBJPROP_XSIZE, w);
+    ObjectSetInteger(0, name, OBJPROP_YSIZE, h);
+    ObjectSetInteger(0, name, OBJPROP_BGCOLOR, clr);
+    ObjectSetInteger(0, name, OBJPROP_BORDER_TYPE, BORDER_FLAT);
+    ObjectSetInteger(0, name, OBJPROP_CORNER, 0);
+    ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+}
+
+//+------------------------------------------------------------------+
+//| セクション作成                                                   |
+//+------------------------------------------------------------------+
+void CreateSection(int x, int y, int w, int h, string title, color bgColor)
+{
+    CreateRect("PC_Sec_" + title, x, y, w, h, bgColor);
+    CreateLabel("PC_SecTitle_" + title, x + 15, y + 8, title, 11, clrWhite, "Arial Bold");
+}
+
+//+------------------------------------------------------------------+
+//| ラベル作成                                                       |
+//+------------------------------------------------------------------+
+void CreateLabel(string name, int x, int y, string text, int size, color clr, 
+                 string font = "Arial", ENUM_ANCHOR_POINT anchor = ANCHOR_LEFT_UPPER)
+{
+    ObjectCreate(0, name, OBJ_LABEL, 0, 0, 0);
+    ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
+    ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
+    ObjectSetString(0, name, OBJPROP_TEXT, text);
+    ObjectSetString(0, name, OBJPROP_FONT, font);
+    ObjectSetInteger(0, name, OBJPROP_FONTSIZE, size);
+    ObjectSetInteger(0, name, OBJPROP_COLOR, clr);
+    ObjectSetInteger(0, name, OBJPROP_ANCHOR, anchor);
+    ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+}
+
+//+------------------------------------------------------------------+
+//| ボタン作成                                                       |
+//+------------------------------------------------------------------+
+void CreateButton(string name, int x, int y, int w, int h, string text, color bgColor)
+{
+    ObjectCreate(0, name, OBJ_BUTTON, 0, 0, 0);
+    ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
+    ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
+    ObjectSetInteger(0, name, OBJPROP_XSIZE, w);
+    ObjectSetInteger(0, name, OBJPROP_YSIZE, h);
+    ObjectSetString(0, name, OBJPROP_TEXT, text);
+    ObjectSetInteger(0, name, OBJPROP_COLOR, clrWhite);
+    ObjectSetInteger(0, name, OBJPROP_BGCOLOR, bgColor);
+    ObjectSetInteger(0, name, OBJPROP_BORDER_COLOR, bgColor);
+    ObjectSetInteger(0, name, OBJPROP_FONTSIZE, 12);
+    ObjectSetString(0, name, OBJPROP_FONT, "Arial Bold");
+}
+
+//+------------------------------------------------------------------+
+//| 全体更新                                                         |
+//+------------------------------------------------------------------+
+void UpdateAll()
+{
+    UpdateAccountInfo();
+    UpdatePositionInfo();
+    UpdateDailyInfo();
+    UpdateStatistics();
+    UpdatePanelData();
+    CalculateTradeScore();
+    UpdateTradeScoreDisplay();
+}
+
+//+------------------------------------------------------------------+
+//| アカウント情報更新                                               |
+//+------------------------------------------------------------------+
+void UpdateAccountInfo()
+{
+    accountBalance = AccountInfoDouble(ACCOUNT_BALANCE);
+    
+    PhaseInfo current = GetCurrentPhaseInfo(accountBalance);
+    
+    currentPhase = current.phase;
+    currentStage = current.stage;
+    currentRiskPercent = current.riskPercent;
+    
+    // 動的リスク計算
+    double calculatedRisk = accountBalance * (current.riskPercent / 100.0);
+    currentMaxRisk = MathMin(current.maxRisk, calculatedRisk);
+}
+
+//+------------------------------------------------------------------+
+//| ポジション情報更新                                               |
+//+------------------------------------------------------------------+
+void UpdatePositionInfo()
+{
+    totalProfit = 0;
+    totalPips = 0;
+    positionCount = 0;
+    
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        if(position.SelectByIndex(i))
+        {
+            if(position.Symbol() == _Symbol)
+            {
+                positionCount++;
+                totalProfit += position.Profit() + position.Swap() + position.Commission();
+                
+                // pips計算
+                double openPrice = position.PriceOpen();
+                double currentPrice = position.PriceCurrent();
+                double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+                
+                if(position.PositionType() == POSITION_TYPE_BUY)
+                    totalPips += (currentPrice - openPrice) / point / 10;
+                else
+                    totalPips += (openPrice - currentPrice) / point / 10;
+            }
+        }
+    }
+}
+
+//+------------------------------------------------------------------+
+//| 日次情報更新                                                     |
+//+------------------------------------------------------------------+
+void UpdateDailyInfo()
+{
+    datetime currentTime = TimeCurrent();
+    MqlDateTime currentTimeStruct, lastTimeStruct;
+    TimeToStruct(currentTime, currentTimeStruct);
+    TimeToStruct(lastDayCheck, lastTimeStruct);
+    
+    // 日付が変わったらリセット
+    if(lastDayCheck == 0 || currentTimeStruct.day_of_year != lastTimeStruct.day_of_year)
+    {
+        todayTradeCount = 0;
+        todayProfit = 0;
+        lastDayCheck = currentTime;
+    }
+    
+    // 本日の取引を集計
+    datetime todayStart = StringToTime(TimeToString(currentTime, TIME_DATE) + " 00:00");
+    HistorySelect(todayStart, currentTime);
+    
+    int deals = HistoryDealsTotal();
+    todayProfit = 0;
+    todayTradeCount = 0;
+    
+    for(int i = 0; i < deals; i++)
+    {
+        ulong dealTicket = HistoryDealGetTicket(i);
+        if(HistoryDealGetString(dealTicket, DEAL_SYMBOL) == _Symbol)
+        {
+            double profit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
+            if(profit != 0) // エントリーは除外
+            {
+                todayProfit += profit;
+                todayTradeCount++;
+            }
+        }
+    }
+}
+
+//+------------------------------------------------------------------+
+//| 統計情報更新                                                     |
+//+------------------------------------------------------------------+
+void UpdateStatistics()
+{
+    datetime currentTime = TimeCurrent();
+    
+    // 直近30日間の全トレードを分析
+    datetime endTime = currentTime;
+    datetime startTime = endTime - 7 * 24 * 60 * 60;
+    HistorySelect(startTime, endTime);
+    
+    // 統計用変数
+    int totalTrades = 0;
+    int winTrades = 0;
+    int lossTrades = 0;
+    double totalWinAmount = 0;
+    double totalLossAmount = 0;
+    
+    // 全ディールを分析
+    int deals = HistoryDealsTotal();
+    for(int i = 0; i < deals; i++)
+    {
+        ulong dealTicket = HistoryDealGetTicket(i);
+        if(HistoryDealGetString(dealTicket, DEAL_SYMBOL) == _Symbol)
+        {
+            double profit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
+            double commission = HistoryDealGetDouble(dealTicket, DEAL_COMMISSION);
+            double swap = HistoryDealGetDouble(dealTicket, DEAL_SWAP);
+            double totalProfit = profit + commission + swap;
+            
+            // エントリーは除外（profit != 0）
+            if(profit != 0)
+            {
+                totalTrades++;
+                
+                if(totalProfit > 0)
+                {
+                    winTrades++;
+                    totalWinAmount += totalProfit;
+                }
+                else if(totalProfit < 0)
+                {
+                    lossTrades++;
+                    totalLossAmount += MathAbs(totalProfit);
+                }
+            }
+        }
+    }
+    
+    // 統計値の計算
+    stats.totalTrades = totalTrades;
+    stats.winTrades = winTrades;
+    stats.totalWinAmount = totalWinAmount;
+    stats.totalLossAmount = totalLossAmount;
+    
+    // 平均値の計算
+    stats.avgWinAmount = winTrades > 0 ? totalWinAmount / winTrades : 0;
+    stats.avgLossAmount = lossTrades > 0 ? totalLossAmount / lossTrades : 0;
+    
+    // プロフィットファクターの計算
+    stats.profitFactor = totalLossAmount > 0 ? totalWinAmount / totalLossAmount : 0;
+    
+    // 実績RRR（平均利益÷平均損失）の計算
+    stats.realRRR = stats.avgLossAmount > 0 ? stats.avgWinAmount / stats.avgLossAmount : 0;
+    
+    // 週次・月次損益の計算（既存のコード）
+    MqlDateTime timeStruct;
+    TimeToStruct(currentTime, timeStruct);
+    int daysSinceMonday = (timeStruct.day_of_week == 0) ? 6 : timeStruct.day_of_week - 1;
+    datetime weekStart = currentTime - daysSinceMonday * 24 * 60 * 60;
+    
+    string monthStartStr = StringFormat("%04d.%02d.01", timeStruct.year, timeStruct.mon);
+    datetime monthStart = StringToTime(monthStartStr);
+    
+    HistorySelect(weekStart, currentTime);
+    stats.weeklyProfit = CalculatePeriodProfit();
+    
+    HistorySelect(monthStart, currentTime);
+    stats.monthlyProfit = CalculatePeriodProfit();
+}
+
+//+------------------------------------------------------------------+
+//| 期間損益計算                                                     |
+//+------------------------------------------------------------------+
+double CalculatePeriodProfit()
+{
+    double periodProfit = 0;
+    int deals = HistoryDealsTotal();
+    
+    for(int i = 0; i < deals; i++)
+    {
+        ulong dealTicket = HistoryDealGetTicket(i);
+        if(HistoryDealGetString(dealTicket, DEAL_SYMBOL) == _Symbol)
+        {
+            periodProfit += HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
+        }
+    }
+    
+    return periodProfit;
+}
+
+//+------------------------------------------------------------------+
+//| パネルデータ更新                                                 |
+//+------------------------------------------------------------------+
+void UpdatePanelData()
+{
+    // アカウント情報
+    PhaseInfo current = GetCurrentPhaseInfo(accountBalance);
+    string badge = GetCurrentBadge();
+    
+    ObjectSetString(0, "PC_ValPhase", OBJPROP_TEXT, 
+                    badge + " " + current.phaseTitle + "-" + current.stageName);
+    ObjectSetString(0, "PC_ValBalance", OBJPROP_TEXT, IntegerToString((int)accountBalance) + "円");
+    ObjectSetString(0, "PC_ValRisk", OBJPROP_TEXT, DoubleToString(currentRiskPercent, 1) + "%");
+    ObjectSetString(0, "PC_ValMaxRisk", OBJPROP_TEXT, IntegerToString((int)currentMaxRisk) + "円");
+    
+    // 日次管理
+    ObjectSetString(0, "PC_ValTodayTrades", OBJPROP_TEXT, 
+                    IntegerToString(todayTradeCount) + "/" + IntegerToString(DailyTradeLimit));
+    
+    // 日次損益と増減率を計算
+    double dailyChangePercent = 0;
+    if(accountBalance - todayProfit > 0) {
+        dailyChangePercent = (todayProfit / (accountBalance - todayProfit)) * 100;
+    }
+    string dailyPLText = IntegerToString((int)todayProfit) + "円";
+    if(todayProfit != 0) {
+        dailyPLText += " (" + (dailyChangePercent >= 0 ? "+" : "") + 
+                        DoubleToString(dailyChangePercent, 2) + "%)";
+    }
+    
+    ObjectSetString(0, "PC_ValTodayPL", OBJPROP_TEXT, dailyPLText);
+    ObjectSetInteger(0, "PC_ValTodayPL", OBJPROP_COLOR, todayProfit >= 0 ? C'76,175,80' : C'244,67,54');
+    
+    // 取引状態
+    string tradeStatus = "取引可能";
+    color statusColor = C'76,175,80';
+    if(todayTradeCount >= DailyTradeLimit) {
+        tradeStatus = "上限到達";
+        statusColor = C'244,67,54';
+    }
+    else if(todayProfit < -currentMaxRisk) {
+        tradeStatus = "リスク制限";
+        statusColor = C'255,152,0';
+    }
+    ObjectSetString(0, "PC_ValTradeStatus", OBJPROP_TEXT, tradeStatus);
+    ObjectSetInteger(0, "PC_ValTradeStatus", OBJPROP_COLOR, statusColor);
+    
+    // ポジション情報
+    ObjectSetString(0, "PC_ValPosCount", OBJPROP_TEXT, IntegerToString(positionCount));
+    ObjectSetString(0, "PC_ValPL", OBJPROP_TEXT, IntegerToString((int)totalProfit) + "円");
+    ObjectSetInteger(0, "PC_ValPL", OBJPROP_COLOR, totalProfit >= 0 ? C'76,175,80' : C'244,67,54');
+    
+    ObjectSetString(0, "PC_ValPips", OBJPROP_TEXT, DoubleToString(totalPips, 1));
+    ObjectSetInteger(0, "PC_ValPips", OBJPROP_COLOR, totalPips >= 0 ? C'76,175,80' : C'244,67,54');
+    
+    ObjectSetString(0, "PC_ValAuto", OBJPROP_TEXT, EnableAutoClose ? "ON" : "OFF");
+    ObjectSetInteger(0, "PC_ValAuto", OBJPROP_COLOR, EnableAutoClose ? C'76,175,80' : C'100,100,100');
+    
+    // 統計情報
+     double winRate = stats.totalTrades > 0 ? (double)stats.winTrades / stats.totalTrades * 100 : 0;
+    
+    // 週次・月次の変化率を計算
+    double weeklyChangePercent = 0;
+    double monthlyChangePercent = 0;
+    
+    double weekStartBalance = accountBalance - stats.weeklyProfit;
+    if(weekStartBalance > 0) {
+        weeklyChangePercent = (stats.weeklyProfit / weekStartBalance) * 100;
+    }
+    
+    double monthStartBalance = accountBalance - stats.monthlyProfit;
+    if(monthStartBalance > 0) {
+        monthlyChangePercent = (stats.monthlyProfit / monthStartBalance) * 100;
+    }
+    
+    // 表示更新
+    ObjectSetString(0, "PC_ValWinRate", OBJPROP_TEXT, DoubleToString(winRate, 1) + "%");
+    
+    // プロフィットファクター表示
+    ObjectSetString(0, "PC_ValPF", OBJPROP_TEXT, DoubleToString(stats.profitFactor, 2));
+    color pfColor = stats.profitFactor >= 1.5 ? C'76,175,80' : 
+                   (stats.profitFactor >= 1.0 ? C'255,152,0' : C'244,67,54');
+    ObjectSetInteger(0, "PC_ValPF", OBJPROP_COLOR, pfColor);
+    
+    // 実績RRR表示
+    ObjectSetString(0, "PC_ValRRR", OBJPROP_TEXT, DoubleToString(stats.realRRR, 2));
+    ObjectSetInteger(0, "PC_ValRRR", OBJPROP_COLOR, stats.realRRR >= 1.0 ? C'76,175,80' : C'244,67,54');
+    
+    // 総損益表示
+    ObjectSetString(0, "PC_ValTotalWin", OBJPROP_TEXT, IntegerToString((int)stats.totalWinAmount) + "円");
+    ObjectSetString(0, "PC_ValTotalLoss", OBJPROP_TEXT, IntegerToString((int)stats.totalLossAmount) + "円");
+    
+    // 週次・月次表示
+    ObjectSetString(0, "PC_ValWeekly", OBJPROP_TEXT, IntegerToString((int)stats.weeklyProfit) + "円");
+    ObjectSetInteger(0, "PC_ValWeekly", OBJPROP_COLOR, stats.weeklyProfit >= 0 ? C'76,175,80' : C'244,67,54');
+    
+    ObjectSetString(0, "PC_ValWeeklyPercent", OBJPROP_TEXT, 
+                    (weeklyChangePercent >= 0 ? "+" : "") + DoubleToString(weeklyChangePercent, 2) + "%");
+    ObjectSetInteger(0, "PC_ValWeeklyPercent", OBJPROP_COLOR, 
+                     weeklyChangePercent >= 0 ? C'76,175,80' : C'244,67,54');
+    
+    ObjectSetString(0, "PC_ValMonthly", OBJPROP_TEXT, IntegerToString((int)stats.monthlyProfit) + "円");
+    ObjectSetInteger(0, "PC_ValMonthly", OBJPROP_COLOR, stats.monthlyProfit >= 0 ? C'76,175,80' : C'244,67,54');
+    
+    ObjectSetString(0, "PC_ValMonthlyPercent", OBJPROP_TEXT, 
+                    (monthlyChangePercent >= 0 ? "+" : "") + DoubleToString(monthlyChangePercent, 2) + "%");
+    ObjectSetInteger(0, "PC_ValMonthlyPercent", OBJPROP_COLOR, 
+                     monthlyChangePercent >= 0 ? C'76,175,80' : C'244,67,54');
+    
+    // LOT計算結果
+    ObjectSetString(0, "PC_ValCalcRisk", OBJPROP_TEXT, 
+        riskAmount > 0 ? IntegerToString((int)riskAmount) + "円" : "---");
+    ObjectSetString(0, "PC_ValCalcLot", OBJPROP_TEXT, 
+        calculatedLot > 0 ? DoubleToString(calculatedLot, 2) : "---");
+    
+    // 推奨リスク額の表示
+    ObjectSetString(0, "PC_ValRecommend", OBJPROP_TEXT, 
+        recommendedRiskAmount > 0 ? IntegerToString((int)recommendedRiskAmount) + "円 (" + 
+        DoubleToString(currentRiskPercent / DailyTradeLimit, 2) + "%)" : "---");
+    
+    // ビジュアル要素の更新
+    UpdateProgressBar("PC_PhaseProgress", GetPhaseProgress());
+}
+
+//+------------------------------------------------------------------+
+//| 全ポジション決済                                                 |
+//+------------------------------------------------------------------+
+void CloseAllPositions()
+{
+    int closed = 0;
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        if(position.SelectByIndex(i))
+        {
+            if(position.Symbol() == _Symbol)
+            {
+                trade.PositionClose(position.Ticket());
+                closed++;
+            }
+        }
+    }
+    
+    if(closed > 0)
+        Alert(IntegerToString(closed) + " ポジションを決済しました");
+}
+
+//+------------------------------------------------------------------+
+//| 利益ポジションのみ決済                                           |
+//+------------------------------------------------------------------+
+void CloseProfitPositions()
+{
+    int closed = 0;
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        if(position.SelectByIndex(i))
+        {
+            if(position.Symbol() == _Symbol && position.Profit() > 0)
+            {
+                trade.PositionClose(position.Ticket());
+                closed++;
+            }
+        }
+    }
+    
+    if(closed > 0)
+        Alert(IntegerToString(closed) + " 利益ポジションを決済しました");
+}
+
+//+------------------------------------------------------------------+
+//| 損失ポジションのみ決済                                           |
+//+------------------------------------------------------------------+
+void CloseLossPositions()
+{
+    int closed = 0;
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        if(position.SelectByIndex(i))
+        {
+            if(position.Symbol() == _Symbol && position.Profit() < 0)
+            {
+                trade.PositionClose(position.Ticket());
+                closed++;
+            }
+        }
+    }
+    
+    if(closed > 0)
+        Alert(IntegerToString(closed) + " 損失ポジションを決済しました");
+}
+
+//+------------------------------------------------------------------+
+//| 建値ストップ移動                                                 |
+//+------------------------------------------------------------------+
+void MoveAllToBreakeven()
+{
+    int modified = 0;
+    double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+    double spread = SymbolInfoInteger(_Symbol, SYMBOL_SPREAD) * point;
+    
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        if(position.SelectByIndex(i))
+        {
+            if(position.Symbol() == _Symbol)
+            {
+                double openPrice = position.PriceOpen();
+                double currentPrice = position.PriceCurrent();
+                double currentSL = position.StopLoss();
+                
+                // 20pips以上の利益で建値に移動
+                double threshold = 20 * point * 10;
+                
+                if(position.PositionType() == POSITION_TYPE_BUY)
+                {
+                    if(currentPrice - openPrice > threshold && currentSL < openPrice)
+                    {
+                        if(trade.PositionModify(position.Ticket(), openPrice + spread, position.TakeProfit()))
+                            modified++;
+                    }
+                }
+                else
+                {
+                    if(openPrice - currentPrice > threshold && (currentSL > openPrice || currentSL == 0))
+                    {
+                        if(trade.PositionModify(position.Ticket(), openPrice - spread, position.TakeProfit()))
+                            modified++;
+                    }
+                }
+            }
+        }
+    }
+    
+    if(modified > 0)
+        Alert(IntegerToString(modified) + " ポジションを建値ストップに移動しました");
+}
+
+//+------------------------------------------------------------------+
+//| 自動決済チェック                                                 |
+//+------------------------------------------------------------------+
+void CheckAutoClose()
+{
+    if(!EnableAutoClose) return;
+    
+    // 条件チェック
+    bool shouldClose = false;
+    string reason = "";
+    
+    if(totalPips >= AutoClosePips)
+    {
+        shouldClose = true;
+        reason = "目標pips達成: " + DoubleToString(totalPips, 1) + "pips";
+    }
+    else if(totalProfit >= AutoCloseMoney)
+    {
+        shouldClose = true;
+        reason = "目標金額達成: " + DoubleToString(totalProfit, 0) + "円";
+    }
+    
+    // 自動決済実行
+    if(shouldClose && positionCount > 0)
+    {
+        if(CloseOnlyProfit)
+            CloseProfitPositions();
+        else
+            CloseAllPositions();
+            
+        Alert("自動決済実行: " + reason);
+    }
+}
+
+//+------------------------------------------------------------------+
+//| 日次リセットチェック                                             |
+//+------------------------------------------------------------------+
+void CheckDailyReset()
+{
+    datetime currentTime = TimeCurrent();
+    MqlDateTime currentTimeStruct, lastTimeStruct;
+    TimeToStruct(currentTime, currentTimeStruct);
+    TimeToStruct(lastDayCheck, lastTimeStruct);
+    
+    // 日付が変わったかチェック
+    if(lastDayCheck != 0 && currentTimeStruct.day_of_year != lastTimeStruct.day_of_year)
+    {
+        todayTradeCount = 0;
+        todayProfit = 0;
+        lastDayCheck = currentTime;
+        Alert("新しい取引日が始まりました");
+    }
+}
+
+//+------------------------------------------------------------------+
+//| 統計情報の保存                                                   |
+//+------------------------------------------------------------------+
+void SaveTradeStats()
+{
+    GlobalVariableSet("PC_TotalTrades", stats.totalTrades);
+    GlobalVariableSet("PC_WinTrades", stats.winTrades);
+    GlobalVariableSet("PC_WeeklyProfit", stats.weeklyProfit);
+    GlobalVariableSet("PC_MonthlyProfit", stats.monthlyProfit);
+}
+
+//+------------------------------------------------------------------+
+//| 統計情報の読み込み                                               |
+//+------------------------------------------------------------------+
+void LoadTradeStats()
+{
+    if(GlobalVariableCheck("PC_TotalTrades"))
+        stats.totalTrades = (int)GlobalVariableGet("PC_TotalTrades");
+    if(GlobalVariableCheck("PC_WinTrades"))
+        stats.winTrades = (int)GlobalVariableGet("PC_WinTrades");
+    if(GlobalVariableCheck("PC_WeeklyProfit"))
+        stats.weeklyProfit = GlobalVariableGet("PC_WeeklyProfit");
+    if(GlobalVariableCheck("PC_MonthlyProfit"))
+        stats.monthlyProfit = GlobalVariableGet("PC_MonthlyProfit");
+}
+
+//+------------------------------------------------------------------+
+//| プログレスバー作成関数                                           |
+//+------------------------------------------------------------------+
+void CreateProgressBar(string name, int x, int y, int w, int h, double percent, 
+                      color fillColor, color bgColor)
+{
+    // 背景
+    string bgName = name + "_bg";
+    CreateRect(bgName, x, y, w, h, bgColor);
+    
+    // 進捗バー
+    string fillName = name + "_fill";
+    int fillWidth = (int)(w * percent / 100);
+    if(fillWidth > 0)
+    {
+        CreateRect(fillName, x, y, fillWidth, h, fillColor);
+    }
+    
+    // パーセント表示
+    string textName = name + "_text";
+    CreateLabel(textName, x + w/2, y + h/2 - 7, 
+                DoubleToString(percent, 1) + "%", 10, clrWhite, "Arial Bold", ANCHOR_CENTER);
+}
+
+//+------------------------------------------------------------------+
+//| フェーズ進捗率計算                                               |
+//+------------------------------------------------------------------+
+double GetPhaseProgress()
+{
+    return GetSubPhaseProgress();
+}
+
+//+------------------------------------------------------------------+
+//| リスク使用率計算                                                 |
+//+------------------------------------------------------------------+
+double GetRiskUsageRate()
+{
+    if(currentMaxRisk == 0) return 0;
+    
+    // 現在のポジションの合計リスクを計算
+    double totalRisk = 0;
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        if(position.SelectByIndex(i))
+        {
+            if(position.Symbol() == _Symbol)
+            {
+                double positionRisk = MathAbs(position.PriceOpen() - position.StopLoss()) * 
+                                    position.Volume() * 
+                                    SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE) * 10;
+                totalRisk += positionRisk;
+            }
+        }
+    }
+    
+    return (totalRisk / currentMaxRisk) * 100;
+}
+
+//+------------------------------------------------------------------+
+//| プログレスバー更新                                               |
+//+------------------------------------------------------------------+
+void UpdateProgressBar(string name, double percent)
+{
+    // fillWidthが0の時の処理を追加
+    string fillName = name + "_fill";
+    string bgName = name + "_bg";
+    
+    if(ObjectFind(0, bgName) >= 0)
+    {
+        int bgWidth = (int)ObjectGetInteger(0, bgName, OBJPROP_XSIZE);
+        int fillWidth = (int)(bgWidth * percent / 100);
+        
+        // fillが既に存在する場合は更新、存在しない場合は作成
+        if(ObjectFind(0, fillName) >= 0)
+        {
+            if(fillWidth > 0)
+            {
+                ObjectSetInteger(0, fillName, OBJPROP_XSIZE, fillWidth);
+            }
+            else
+            {
+                ObjectDelete(0, fillName);  // 0%の場合は削除
+            }
+        }
+        else if(fillWidth > 0)
+        {
+            // fillを新規作成
+            int bgX = (int)ObjectGetInteger(0, bgName, OBJPROP_XDISTANCE);
+            int bgY = (int)ObjectGetInteger(0, bgName, OBJPROP_YDISTANCE);
+            int bgH = (int)ObjectGetInteger(0, bgName, OBJPROP_YSIZE);
+            CreateRect(fillName, bgX, bgY, fillWidth, bgH, C'52,152,219');
+        }
+    }
+    
+    // テキスト更新
+    string textName = name + "_text";
+    if(ObjectFind(0, textName) >= 0)
+    {
+        ObjectSetString(0, textName, OBJPROP_TEXT, DoubleToString(percent, 1) + "%");
+    }
+}
+
+//+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//| 現在のフェーズ情報を取得                                         |
+//+------------------------------------------------------------------+
+PhaseInfo GetCurrentPhaseInfo(double balance)
+{
+    for(int i = 0; i < 15; i++)
+    {
+        if(balance >= phaseData[i].startBalance && balance < phaseData[i].endBalance)
+        {
+            return phaseData[i];
+        }
+    }
+    
+    // 最終段階を超えた場合
+    PhaseInfo finalPhase = phaseData[14];
+    finalPhase.stageName = "レジェンド";
+    return finalPhase;
+}
+
+//+------------------------------------------------------------------+
+//| サブフェーズの進捗率を取得                                       |
+//+------------------------------------------------------------------+
+double GetSubPhaseProgress()
+{
+    PhaseInfo current = GetCurrentPhaseInfo(accountBalance);
+    
+    if(accountBalance >= current.endBalance)
+        return 100.0;
+        
+    double progress = (accountBalance - current.startBalance) / 
+                     (current.endBalance - current.startBalance) * 100.0;
+    
+    return MathMax(0, MathMin(100, progress));
+}
+
+//+------------------------------------------------------------------+
+//| 全体の進捗率を取得                                               |
+//+------------------------------------------------------------------+
+double GetOverallProgress()
+{
+    double maxBalance = 3000000; // 最終目標
+    double progress = (accountBalance - 5000) / (maxBalance - 5000) * 100.0;
+    
+    return MathMax(0, MathMin(100, progress));
+}
+
+//+------------------------------------------------------------------+
+//| 次のマイルストーンまでの距離                                     |
+//+------------------------------------------------------------------+
+double GetNextMilestoneDistance()
+{
+    PhaseInfo current = GetCurrentPhaseInfo(accountBalance);
+    return current.endBalance - accountBalance;
+}
+
+//+------------------------------------------------------------------+
+//| 達成ポイントの計算                                               |
+//+------------------------------------------------------------------+
+int GetAchievementPoints()
+{
+    PhaseInfo current = GetCurrentPhaseInfo(accountBalance);
+    
+    // フェーズ × ステージで基本ポイント
+    int basePoints = current.phase * 100 + (current.stage + 1) * 10;
+    
+    // 進捗率ボーナス
+    double progress = GetSubPhaseProgress();
+    int progressBonus = (int)(progress / 10) * 5; // 10%ごとに5ポイント
+    
+    return basePoints + progressBonus;
+}
+
+//+------------------------------------------------------------------+
+//| 現在のバッジを取得                                               |
+//+------------------------------------------------------------------+
+string GetCurrentBadge()
+{
+    PhaseInfo current = GetCurrentPhaseInfo(accountBalance);
+    
+    int index = (current.phase - 1) * 3 + current.stage;
+    if(index < 15)
+        return badges[index];
+    
+    return "MAX";
+}
+
+//+------------------------------------------------------------------+
+//| レベルアップチェック                                             |
+//+------------------------------------------------------------------+
+bool CheckLevelUp(double oldBalance, double newBalance)
+{
+    PhaseInfo oldPhase = GetCurrentPhaseInfo(oldBalance);
+    PhaseInfo newPhase = GetCurrentPhaseInfo(newBalance);
+    
+    // サブフェーズが変わったかチェック
+    if(oldPhase.phase != newPhase.phase || oldPhase.stage != newPhase.stage)
+    {
+        string message = StringFormat(
+            "🎉 レベルアップ！\n%s %s 達成！\n獲得バッジ: %s\n進捗: %.1f%% → %.1f%%",
+            newPhase.phaseTitle,
+            newPhase.stageName,
+            GetCurrentBadge(),
+            (oldBalance - oldPhase.startBalance) / (oldPhase.endBalance - oldPhase.startBalance) * 100,
+            GetSubPhaseProgress()
+        );
+        
+        Alert(message);
+        Print(message);
+        return true;
+    }
+    
+    return false;
+}
+
+//+------------------------------------------------------------------+
+//| フェーズ詳細情報取得                                             |
+//+------------------------------------------------------------------+
+string GetPhaseDetails()
+{
+    PhaseInfo current = GetCurrentPhaseInfo(accountBalance);
+    double subProgress = GetSubPhaseProgress();
+    double overallProgress = GetOverallProgress();
+    int points = GetAchievementPoints();
+    
+    string details = StringFormat(
+        "=== フェーズ詳細 ===\n"
+        "%s %s - %s\n"
+        "サブ進捗: %.1f%% (¥%.0f/¥%.0f)\n"
+        "全体進捗: %.1f%% (最終目標: ¥3,000,000)\n"
+        "獲得ポイント: %d pt\n"
+        "次のマイルストーン: ¥%.0f (残り¥%.0f)\n"
+        "現在リスク設定: %.1f%% (上限¥%.0f)",
+        GetCurrentBadge(),
+        current.phaseTitle,
+        current.stageName,
+        subProgress,
+        accountBalance,
+        current.endBalance,
+        overallProgress,
+        points,
+        current.endBalance,
+        GetNextMilestoneDistance(),
+        currentRiskPercent,
+        currentMaxRisk
+    );
+    
+    return details;
+}
+
+//+------------------------------------------------------------------+
+//| 直近1週間の最大ドローダウン計算                                  |
+//+------------------------------------------------------------------+
+double CalculateWeeklyMaxDrawdown()
+{
+    datetime currentTime = TimeCurrent();
+    datetime weekStart = currentTime - 7 * 24 * 60 * 60;
+    
+    // 週間の最高残高と最大DD計算ロジックを追加
+    double maxBalance = accountBalance;
+    double currentDD = 0;
+    double maxDD = 0;
+    
+    // HistorySelectで期間内の取引履歴を取得
+    // 日次残高の推移を計算
+    // 最大DDを返す
+    
+    return maxDD; // マイナス値で返す（例：-8.5）
+}
+
+//+------------------------------------------------------------------+
+//| 直近1週間のRRR計算                                              |
+//+------------------------------------------------------------------+
+double CalculateWeeklyRRR()
+{
+    datetime currentTime = TimeCurrent();
+    datetime weekStart = currentTime - 7 * 24 * 60 * 60;
+    HistorySelect(weekStart, currentTime);
+    
+    double weeklyWinTotal = 0;
+    double weeklyLossTotal = 0;
+    int weeklyWins = 0;
+    int weeklyLosses = 0;
+    
+    // 週間の勝ち/負けを集計
+    // 平均利益/平均損失を計算
+    
+    double avgWin = weeklyWins > 0 ? weeklyWinTotal / weeklyWins : 0;
+    double avgLoss = weeklyLosses > 0 ? weeklyLossTotal / weeklyLosses : 0;
+    
+    return avgLoss > 0 ? avgWin / avgLoss : 0;
+}
+
+//+------------------------------------------------------------------+
+//| トレードスコア計算                                               |
+//+------------------------------------------------------------------+
+void CalculateTradeScore()
+{
+    double winRate = 0;
+    if(stats.totalTrades > 0) {
+        winRate = (double)stats.winTrades / stats.totalTrades * 100;
+    }
+    
+    // A. 収益性スコア（300点に変更）
+    // 勝率スコア（35%以上で加点、65%で満点）
+    if(winRate >= 65) {
+        tradeScore.winRateScore = 100;
+    }
+    else if(winRate >= 35) {
+        tradeScore.winRateScore = (winRate - 35) * 3.33;
+    }
+    else {
+        tradeScore.winRateScore = 0;
+    }
+    
+    // プロフィットファクタースコア
+    // PF 0.8以上で加点、2.5で満点
+    if(stats.profitFactor >= 2.5) {
+        tradeScore.expectancyScore = 100;
+    }
+    else if(stats.profitFactor >= 0.8) {
+        tradeScore.expectancyScore = (stats.profitFactor - 0.8) * 58.82; // 0.8-2.5を0-100点に変換
+    }
+    else {
+        tradeScore.expectancyScore = 0;
+    }
+    
+    // RRRスコア（直近1週間）
+    double weeklyRRR = CalculateWeeklyRRR();
+    if(weeklyRRR >= 5.0) {
+        tradeScore.rrScore = 100;
+    }
+    else if(weeklyRRR >= 1.0) {
+        tradeScore.rrScore = (weeklyRRR - 1.0) * 25;  // 1-5を0-100に変換
+    }
+    else {
+        tradeScore.rrScore = 0;
+    }
+    
+    // B. リスク管理スコア（300点）
+    // ルール遵守率（日次上限、推奨ロット使用）
+    tradeScore.ruleComplianceScore = 100 - (tradeScore.ruleViolations * 5); // 違反1回につき-5点に緩和
+    tradeScore.ruleComplianceScore = MathMax(0, tradeScore.ruleComplianceScore);
+    
+    // ドローダウン管理（直近1週間、-15%→-5%で満点）
+    double weeklyDD = CalculateWeeklyMaxDrawdown();
+    if(weeklyDD >= -5) {
+        tradeScore.drawdownScore = 100;
+    }
+    else if(weeklyDD >= -15) {
+        tradeScore.drawdownScore = (weeklyDD + 15) * 10; // -15%で0点、-5%で100点
+    }
+    else {
+        tradeScore.drawdownScore = 0;
+    }
+    
+    // 資金管理スコア（適切なロットサイジング）
+    tradeScore.moneyManageScore = 100; // デフォルト満点、違反があれば減点
+    
+    // C. 一貫性スコア（100点）
+    // 週次成績の安定性（標準偏差が小さいほど高得点）
+    double weeklyStdDev = CalculateWeeklyStandardDeviation();
+    if(weeklyStdDev < 5) tradeScore.consistencyScore = 100;
+    else if(weeklyStdDev < 10) tradeScore.consistencyScore = 100 - (weeklyStdDev - 5) * 10;
+    else tradeScore.consistencyScore = 50;
+    
+    // D. 成長スコア（200点）
+    // スキル向上（RRR、勝率の改善）
+    double improvement = CalculateSkillImprovement();
+    tradeScore.skillScore = MathMin(100, 50 + improvement * 5);
+    
+    // フェーズ進捗
+    tradeScore.progressScore = GetOverallProgress(); // 既存の全体進捗率を使用
+    
+    // ボーナス計算
+    tradeScore.bonusPoints = 0;
+    // 週間無敗ボーナス
+    if(IsWeeklyUndefeated()) tradeScore.bonusPoints += 50;
+    // 週間全勝ボーナス
+    if(IsWeeklyPerfect()) tradeScore.bonusPoints += 100;
+    // 改善ボーナス
+    if(tradeScore.totalScore > tradeScore.prevWeekScore) tradeScore.bonusPoints += 20;
+    
+    // ペナルティ計算
+    tradeScore.penaltyPoints = 0;
+    // オーバートレード
+    if(todayTradeCount > DailyTradeLimit) tradeScore.penaltyPoints += 30; // 50→30に緩和
+    // リベンジトレード（連敗後の過大ロット）
+    if(CheckRevengeTrading()) tradeScore.penaltyPoints += 20; // 30→20に緩和
+    
+    // 総合スコア計算（1000点満点に変更）
+    double profitScore = tradeScore.winRateScore + tradeScore.expectancyScore + tradeScore.rrScore; // 300点満点
+    double riskScore = tradeScore.ruleComplianceScore + tradeScore.drawdownScore + tradeScore.moneyManageScore; // 300点満点
+    double growthScore = tradeScore.skillScore + tradeScore.progressScore; // 200点満点
+    
+    tradeScore.totalScore = profitScore + riskScore + tradeScore.consistencyScore + growthScore;
+    tradeScore.totalScore += tradeScore.bonusPoints - tradeScore.penaltyPoints;
+    tradeScore.totalScore = MathMax(0, MathMin(1000, tradeScore.totalScore)); // 1000点満点
+    
+    // ランク判定（難易度調整版）
+    if(tradeScore.totalScore >= 900) tradeScore.rank = "S+";      // 90%以上（旧95%）
+    else if(tradeScore.totalScore >= 850) tradeScore.rank = "S";   // 85%以上（旧90%）
+    else if(tradeScore.totalScore >= 800) tradeScore.rank = "A+";  // 80%以上（旧85%）
+    else if(tradeScore.totalScore >= 750) tradeScore.rank = "A";   // 75%以上（旧80%）
+    else if(tradeScore.totalScore >= 650) tradeScore.rank = "B+";  // 65%以上（旧70%）
+    else if(tradeScore.totalScore >= 550) tradeScore.rank = "B";   // 55%以上（旧60%）
+    else if(tradeScore.totalScore >= 450) tradeScore.rank = "C+";  // 45%以上（旧50%）
+    else tradeScore.rank = "C";
+}
+
+//+------------------------------------------------------------------+
+//| 週次標準偏差計算                                                 |
+//+------------------------------------------------------------------+
+double CalculateWeeklyStandardDeviation()
+{
+    // 簡易実装：実際には週次成績の履歴から計算
+    return 5.0; // 仮の値
+}
+
+//+------------------------------------------------------------------+
+//| スキル向上度計算                                                 |
+//+------------------------------------------------------------------+
+double CalculateSkillImprovement()
+{
+    // 簡易実装：前月との比較
+    return 10.0; // 仮の値
+}
+
+//+------------------------------------------------------------------+
+//| 週間無敗チェック                                                 |
+//+------------------------------------------------------------------+
+bool IsWeeklyUndefeated()
+{
+    // 今週の負けトレードがないかチェック
+    return false; // 仮の実装
+}
+
+//+------------------------------------------------------------------+
+//| 週間全勝チェック                                                 |
+//+------------------------------------------------------------------+
+bool IsWeeklyPerfect()
+{
+    // 今週全勝かチェック
+    return false; // 仮の実装
+}
+
+//+------------------------------------------------------------------+
+//| リベンジトレードチェック                                         |
+//+------------------------------------------------------------------+
+bool CheckRevengeTrading()
+{
+    // 連敗後にロットが増えていないかチェック
+    if(tradeScore.consecutiveLosses >= 2 && calculatedLot > tradeScore.lastLotSize) {
+        return true;
+    }
+    return false;
+}
+
+//+------------------------------------------------------------------+
+//| トレードスコア表示更新                                           |
+//+------------------------------------------------------------------+
+void UpdateTradeScoreDisplay()
+{
+    // 総合スコアとランク（900点満点として表示）
+    ObjectSetString(0, "PC_ValTotalScore", OBJPROP_TEXT, IntegerToString((int)tradeScore.totalScore) + "/900");
+    ObjectSetString(0, "PC_ValRank", OBJPROP_TEXT, tradeScore.rank);
+    
+    // ランクによる色分け - 変更なし
+    color rankColor = C'255,215,0';
+    if(tradeScore.rank == "S+" || tradeScore.rank == "S") rankColor = C'255,215,0';
+    else if(tradeScore.rank == "A+" || tradeScore.rank == "A") rankColor = C'192,192,192';
+    else if(tradeScore.rank == "B+" || tradeScore.rank == "B") rankColor = C'205,127,50';
+    else rankColor = C'160,160,160';
+    ObjectSetInteger(0, "PC_ValRank", OBJPROP_COLOR, rankColor);
+    
+    // 各カテゴリスコア（収益性は300点満点）
+    double profitScore = tradeScore.winRateScore + tradeScore.expectancyScore + tradeScore.rrScore;
+    double riskScore = tradeScore.ruleComplianceScore + tradeScore.drawdownScore + tradeScore.moneyManageScore;
+    double growthScore = tradeScore.skillScore + tradeScore.progressScore;
+    
+    ObjectSetString(0, "PC_ValProfitScore", OBJPROP_TEXT, IntegerToString((int)profitScore) + "/200");
+    ObjectSetString(0, "PC_ValRiskScore", OBJPROP_TEXT, IntegerToString((int)riskScore) + "/300");
+    ObjectSetString(0, "PC_ValConsistScore", OBJPROP_TEXT, IntegerToString((int)tradeScore.consistencyScore) + "/100");
+    ObjectSetString(0, "PC_ValGrowthScore", OBJPROP_TEXT, IntegerToString((int)growthScore) + "/200");
+    
+    // 詳細スコア（勝率とPFを表示）
+    double winRate = stats.totalTrades > 0 ? (double)stats.winTrades / stats.totalTrades * 100 : 0;
+    ObjectSetString(0, "PC_ValWinRateS", OBJPROP_TEXT, DoubleToString(winRate, 1) + "%");
+    ObjectSetString(0, "PC_ValRRS", OBJPROP_TEXT, DoubleToString(stats.profitFactor, 2));  // PF値を表示
+    ObjectSetString(0, "PC_ValExpectS", OBJPROP_TEXT, IntegerToString((int)tradeScore.expectancyScore));
+    ObjectSetString(0, "PC_ValComplianceS", OBJPROP_TEXT, IntegerToString((int)tradeScore.ruleComplianceScore) + "%");
+    
+    // ボーナス・ペナルティ - 変更なし
+    ObjectSetString(0, "PC_ValBonus", OBJPROP_TEXT, "+" + IntegerToString((int)tradeScore.bonusPoints));
+    ObjectSetString(0, "PC_ValPenalty", OBJPROP_TEXT, "-" + IntegerToString((int)tradeScore.penaltyPoints));
+    
+    // トレンド - 変更なし
+    string trend = "→";
+    color trendColor = textColor;
+    if(tradeScore.totalScore > tradeScore.prevWeekScore) {
+        trend = "↑ 改善中";
+        trendColor = greenColor;
+    } else if(tradeScore.totalScore < tradeScore.prevWeekScore) {
+        trend = "↓ 要注意";
+        trendColor = redColor;
+    }
+    ObjectSetString(0, "PC_ValTrend", OBJPROP_TEXT, trend);
+    ObjectSetInteger(0, "PC_ValTrend", OBJPROP_COLOR, trendColor);
+    
+    // プログレスバー更新（900点満点を100%に変換）
+        double scorePercent = tradeScore.totalScore / 9;
+    UpdateProgressBar("PC_ScoreProgress", scorePercent);
+    
+    // パーセント表示を別途更新
+    ObjectSetString(0, "PC_ScorePercent", OBJPROP_TEXT, 
+                    DoubleToString(scorePercent, 1) + "%");
+}
+
+//+------------------------------------------------------------------+
+//| プログレスバー作成関数（テキストなし版）                         |
+//+------------------------------------------------------------------+
+void CreateProgressBarNoText(string name, int x, int y, int w, int h, double percent, 
+                             color fillColor, color bgColor)
+{
+    // 背景
+    string bgName = name + "_bg";
+    CreateRect(bgName, x, y, w, h, bgColor);
+    
+    // 進捗バー
+    string fillName = name + "_fill";
+    int fillWidth = (int)(w * percent / 100);
+    if(fillWidth > 0)
+    {
+        CreateRect(fillName, x, y, fillWidth, h, fillColor);
+    }
+}
+
+
+/* 新しいランク基準（900点満点）
+S+: 855点以上 (95%) - レジェンドトレーダー
+S:  810点以上 (90%) - マスタートレーダー
+A+: 765点以上 (85%) - エキスパート
+A:  720点以上 (80%) - 上級者
+B+: 630点以上 (70%) - 中級者
+B:  540点以上 (60%) - 初級者
+C+: 450点以上 (50%) - 見習い
+C:  450点未満        - 初心者
+*/
