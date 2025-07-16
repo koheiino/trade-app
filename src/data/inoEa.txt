@@ -1,0 +1,720 @@
+//+------------------------------------------------------------------+
+//|                                            NaitoMethod_EA.mq5    |
+//|                                  Copyright 2024, TraderAssistant |
+//|                                   Based on Naito-san's Method    |
+//+------------------------------------------------------------------+
+#property copyright "Copyright 2024, TraderAssistant"
+#property version   "1.00"
+#property description "Naito-san's Wave Extension & Correction Trading Method"
+
+#include <Trade\Trade.mqh>
+#include <Trade\PositionInfo.mqh>
+
+//--- 入力パラメータ
+input group "=== 基本設定 ==="
+input double   RiskPercentage = 2.0;        // リスク率（%）
+input int      MagicNumber = 12345;         // マジックナンバー
+input bool     EnableAutoTrading = true;    // 自動取引有効
+
+input group "=== 波動分析設定 ==="
+input int      WaveAnalysisPeriod = 100;    // 波動分析期間
+input double   ExtensionThreshold = 1.618;  // 延長判定閾値
+input bool     Use3TimeFrames = true;       // 3時間足分析
+input ENUM_TIMEFRAMES HigherTF1 = PERIOD_H4;   // 上位時間足1
+input ENUM_TIMEFRAMES HigherTF2 = PERIOD_H1;   // 上位時間足2
+
+input group "=== フィボナッチ設定 ==="
+input double   FiboEntry_382 = 38.2;        // エントリーフィボ38.2%
+input double   FiboEntry_500 = 50.0;        // エントリーフィボ50.0%
+input double   FiboEntry_618 = 61.8;        // エントリーフィボ61.8%
+input double   FiboTarget_S16 = 161.8;      // 利確目標S16
+input double   FiboTarget_S26 = 261.8;      // 利確目標S26
+input double   FiboTarget_S42 = 423.6;      // 延長時利確S42
+
+input group "=== 修正トレード設定 ==="
+input bool     CorrectionTradeOnly = true;  // 修正トレードのみ
+input double   CorrectionExitRatio = 0.7;   // 修正時利確比率
+input int      MaxDailyTrades = 3;          // 日次最大取引数
+input bool     EarlyExitOnCorrection = true; // 修正で早期利確
+
+input group "=== リスク管理 ==="
+input double   MaxDrawdownPercent = 15.0;   // 最大DD%
+input bool     ReduceLotAfterLoss = true;   // 負け後ロット減
+input double   LotReductionRatio = 0.5;     // ロット減少比率
+input bool     StopTradingOnLimit = true;   // 上限で取引停止
+
+//--- グローバル変数
+CTrade trade;
+CPositionInfo position;
+
+struct WaveInfo {
+    double high;
+    double low;
+    int highBar;
+    int lowBar;
+    datetime highTime;
+    datetime lowTime;
+    bool isUptrend;
+    double extension;
+    bool isExtended;
+};
+
+struct CorrectionInfo {
+    double startPrice;
+    double endPrice;
+    double retracement;
+    bool isActive;
+    bool isComplete;
+    int correctionType; // 1=急落, 2=横ばい, 3=ジグザグ
+};
+
+struct EnvironmentInfo {
+    bool higherTF1_Bullish;
+    bool higherTF2_Bullish;
+    bool currentTF_Correction;
+    bool trendAlignment;
+    int dominantDirection; // 1=上昇, -1=下降, 0=不明
+};
+
+WaveInfo currentWave;
+CorrectionInfo correction;
+EnvironmentInfo environment;
+
+// 統計管理
+int todayTrades = 0;
+double todayProfit = 0;
+datetime lastTradeDay = 0;
+double startingBalance;
+bool tradingEnabled = true;
+
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+    trade.SetExpertMagicNumber(MagicNumber);
+    startingBalance = AccountInfoDouble(ACCOUNT_BALANCE);
+    
+    Print("Naito Method EA 開始 - リスク率: ", RiskPercentage, "%");
+    Print("修正トレードのみ: ", CorrectionTradeOnly ? "有効" : "無効");
+    Print("3時間足分析: ", Use3TimeFrames ? "有効" : "無効");
+    
+    return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Expert deinitialization function                                 |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+    Print("Naito Method EA 終了");
+}
+
+//+------------------------------------------------------------------+
+//| Expert tick function                                             |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+    if(!EnableAutoTrading || !tradingEnabled) return;
+    
+    CheckDailyReset();
+    CheckDrawdownLimit();
+    
+    if(todayTrades >= MaxDailyTrades) return;
+    
+    // 環境認識
+    AnalyzeEnvironment();
+    
+    // 波動分析
+    AnalyzeWave();
+    
+    // 修正分析
+    AnalyzeCorrection();
+    
+    // エントリー判定
+    if(CorrectionTradeOnly) {
+        CheckCorrectionEntry();
+    } else {
+        CheckTrendEntry();
+    }
+    
+    // エグジット管理
+    ManageExits();
+}
+
+//+------------------------------------------------------------------+
+//| 環境認識分析                                                     |
+//+------------------------------------------------------------------+
+void AnalyzeEnvironment()
+{
+    if(!Use3TimeFrames) return;
+    
+    // 上位時間足1の方向性
+    environment.higherTF1_Bullish = IsTimeframeBullish(HigherTF1);
+    
+    // 上位時間足2の方向性
+    environment.higherTF2_Bullish = IsTimeframeBullish(HigherTF2);
+    
+    // 現在時間足の修正状態
+    environment.currentTF_Correction = IsInCorrection();
+    
+    // トレンド整合性
+    environment.trendAlignment = (environment.higherTF1_Bullish == environment.higherTF2_Bullish);
+    
+    // 支配的方向
+    if(environment.trendAlignment) {
+        environment.dominantDirection = environment.higherTF1_Bullish ? 1 : -1;
+    } else {
+        environment.dominantDirection = 0;
+    }
+}
+
+//+------------------------------------------------------------------+
+//| 時間足の方向性判定                                               |
+//+------------------------------------------------------------------+
+bool IsTimeframeBullish(ENUM_TIMEFRAMES timeframe)
+{
+    double ma20 = iMA(_Symbol, timeframe, 20, 0, MODE_SMA, PRICE_CLOSE);
+    double ma50 = iMA(_Symbol, timeframe, 50, 0, MODE_SMA, PRICE_CLOSE);
+    
+    double ma20_val[], ma50_val[];
+    if(CopyBuffer(ma20, 0, 0, 3, ma20_val) != 3) return false;
+    if(CopyBuffer(ma50, 0, 0, 3, ma50_val) != 3) return false;
+    
+    // MA20 > MA50 で上昇トレンド
+    return (ma20_val[2] > ma50_val[2] && ma20_val[1] > ma20_val[0]);
+}
+
+//+------------------------------------------------------------------+
+//| 修正状態判定                                                     |
+//+------------------------------------------------------------------+
+bool IsInCorrection()
+{
+    // 移動平均の収束・発散で判定
+    double ma5 = iMA(_Symbol, PERIOD_CURRENT, 5, 0, MODE_SMA, PRICE_CLOSE);
+    double ma20 = iMA(_Symbol, PERIOD_CURRENT, 20, 0, MODE_SMA, PRICE_CLOSE);
+    
+    double ma5_val[], ma20_val[];
+    if(CopyBuffer(ma5, 0, 0, 5, ma5_val) != 5) return false;
+    if(CopyBuffer(ma20, 0, 0, 5, ma20_val) != 5) return false;
+    
+    // 平均の距離が縮小していれば修正
+    double dist1 = MathAbs(ma5_val[4] - ma20_val[4]);
+    double dist2 = MathAbs(ma5_val[3] - ma20_val[3]);
+    double dist3 = MathAbs(ma5_val[2] - ma20_val[2]);
+    
+    return (dist3 < dist2 && dist2 < dist1);
+}
+
+//+------------------------------------------------------------------+
+//| 波動分析                                                         |
+//+------------------------------------------------------------------+
+void AnalyzeWave()
+{
+    double high[], low[];
+    if(CopyHigh(_Symbol, PERIOD_CURRENT, 0, WaveAnalysisPeriod, high) != WaveAnalysisPeriod) return;
+    if(CopyLow(_Symbol, PERIOD_CURRENT, 0, WaveAnalysisPeriod, low) != WaveAnalysisPeriod) return;
+    
+    // 最近の高値・安値を検索
+    int highestBar = ArrayMaximum(high, 10, 50);
+    int lowestBar = ArrayMinimum(low, 10, 50);
+    
+    currentWave.high = high[highestBar];
+    currentWave.low = low[lowestBar];
+    currentWave.highBar = highestBar;
+    currentWave.lowBar = lowestBar;
+    
+    // 波の方向性
+    currentWave.isUptrend = (lowestBar > highestBar); // 安値が後なら上昇波
+    
+    // 延長判定
+    double waveRange = MathAbs(currentWave.high - currentWave.low);
+    double previousRange = GetPreviousWaveRange();
+    
+    if(previousRange > 0) {
+        currentWave.extension = waveRange / previousRange;
+        currentWave.isExtended = (currentWave.extension > ExtensionThreshold);
+    }
+}
+
+//+------------------------------------------------------------------+
+//| 前回波動範囲取得                                                 |
+//+------------------------------------------------------------------+
+double GetPreviousWaveRange()
+{
+    double high[], low[];
+    if(CopyHigh(_Symbol, PERIOD_CURRENT, 50, 50, high) != 50) return 0;
+    if(CopyLow(_Symbol, PERIOD_CURRENT, 50, 50, low) != 50) return 0;
+    
+    int prevHighestBar = ArrayMaximum(high, 10, 40);
+    int prevLowestBar = ArrayMinimum(low, 10, 40);
+    
+    return MathAbs(high[prevHighestBar] - low[prevLowestBar]);
+}
+
+//+------------------------------------------------------------------+
+//| 修正分析                                                         |
+//+------------------------------------------------------------------+
+void AnalyzeCorrection()
+{
+    double close[];
+    if(CopyClose(_Symbol, PERIOD_CURRENT, 0, 20, close) != 20) return;
+    
+    // 修正の特徴を分析
+    bool isRangeMove = IsRangeMovement(close);
+    bool isSharpMove = IsSharpMovement(close);
+    
+    if(isRangeMove) {
+        correction.correctionType = 2; // 横ばい修正
+        correction.isActive = true;
+    } else if(isSharpMove) {
+        correction.correctionType = 1; // 急激修正
+        correction.isActive = true;
+    } else {
+        correction.correctionType = 3; // ジグザグ修正
+        correction.isActive = IsInCorrection();
+    }
+    
+    // フィボナッチリトレースメント計算
+    if(correction.isActive) {
+        CalculateFibonacci();
+    }
+}
+
+//+------------------------------------------------------------------+
+//| レンジ動き判定                                                   |
+//+------------------------------------------------------------------+
+bool IsRangeMovement(const double &close[])
+{
+    double highest = close[ArrayMaximum(close)];
+    double lowest = close[ArrayMinimum(close)];
+    double range = highest - lowest;
+    
+    // ATRと比較
+    double atr = GetATR(14);
+    return (range < atr * 0.5); // ATRの50%以下なら横ばい
+}
+
+//+------------------------------------------------------------------+
+//| 急激動き判定                                                     |
+//+------------------------------------------------------------------+
+bool IsSharpMovement(const double &close[])
+{
+    double atr = GetATR(14);
+    
+    for(int i = 1; i < ArraySize(close); i++) {
+        double change = MathAbs(close[i] - close[i-1]);
+        if(change > atr * 1.5) return true; // ATRの150%以上なら急激
+    }
+    return false;
+}
+
+//+------------------------------------------------------------------+
+//| ATR取得                                                          |
+//+------------------------------------------------------------------+
+double GetATR(int period)
+{
+    int atr_handle = iATR(_Symbol, PERIOD_CURRENT, period);
+    double atr_val[];
+    if(CopyBuffer(atr_handle, 0, 0, 1, atr_val) != 1) return 0;
+    return atr_val[0];
+}
+
+//+------------------------------------------------------------------+
+//| フィボナッチ計算                                                 |
+//+------------------------------------------------------------------+
+void CalculateFibonacci()
+{
+    double waveRange = MathAbs(currentWave.high - currentWave.low);
+    double currentPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+    
+    if(currentWave.isUptrend) {
+        // 上昇波の修正
+        correction.retracement = (currentWave.high - currentPrice) / waveRange * 100;
+    } else {
+        // 下降波の修正
+        correction.retracement = (currentPrice - currentWave.low) / waveRange * 100;
+    }
+    
+    // 修正完了判定
+    correction.isComplete = (correction.retracement >= FiboEntry_618);
+}
+
+//+------------------------------------------------------------------+
+//| 修正エントリーチェック                                           |
+//+------------------------------------------------------------------+
+void CheckCorrectionEntry()
+{
+    if(!correction.isActive || PositionsTotal() > 0) return;
+    
+    double currentPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+    
+    // naitoさんの理論：修正の終わりでエントリー
+    bool fibonacciSignal = CheckFibonacciEntry();
+    bool correctionEndSignal = IsCorrectentryion_End();
+    bool environmentOK = CheckEnvironmentForEntry();
+    
+    if(fibonacciSignal && correctionEndSignal && environmentOK) {
+        
+        bool isUpEntry = ShouldEnterUp();
+        
+        if(isUpEntry) {
+            OpenBuyPosition();
+        } else {
+            OpenSellPosition();
+        }
+    }
+}
+
+//+------------------------------------------------------------------+
+//| フィボナッチエントリー判定                                       |
+//+------------------------------------------------------------------+
+bool CheckFibonacciEntry()
+{
+    // 38.2%, 50%, 61.8%での反応を確認
+    return (correction.retracement >= FiboEntry_382 && 
+            correction.retracement <= FiboEntry_618 + 10); // 10%マージン
+}
+
+//+------------------------------------------------------------------+
+//| 修正終了判定                                                     |
+//+------------------------------------------------------------------+
+bool IsCorrection_End()
+{
+    // 修正のサインに基づいて判定
+    // naitoさんの手法：サインが出現したら終了と判断
+    
+    double close[];
+    if(CopyClose(_Symbol, PERIOD_CURRENT, 0, 5, close) != 5) return false;
+    
+    // 直近5本の終値で判定
+    bool priceStabilized = IsStabilized(close);
+    bool volumeDecrease = IsVolumeDecreasing();
+    
+    return (priceStabilized || volumeDecrease);
+}
+
+//+------------------------------------------------------------------+
+//| 価格安定判定                                                     |
+//+------------------------------------------------------------------+
+bool IsStabilized(const double &close[])
+{
+    double range = close[ArrayMaximum(close)] - close[ArrayMinimum(close)];
+    double atr = GetATR(14);
+    
+    return (range < atr * 0.3); // ATRの30%以下で安定
+}
+
+//+------------------------------------------------------------------+
+//| ボリューム減少判定                                               |
+//+------------------------------------------------------------------+
+bool IsVolumeDecreasing()
+{
+    long volume[];
+    if(CopyTickVolume(_Symbol, PERIOD_CURRENT, 0, 5, volume) != 5) return false;
+    
+    // 直近3本のボリュームが減少傾向
+    return (volume[4] < volume[3] && volume[3] < volume[2]);
+}
+
+//+------------------------------------------------------------------+
+//| 環境確認                                                         |
+//+------------------------------------------------------------------+
+bool CheckEnvironmentForEntry()
+{
+    if(!Use3TimeFrames) return true;
+    
+    // トレンド整合性が必要
+    return environment.trendAlignment;
+}
+
+//+------------------------------------------------------------------+
+//| 上昇エントリー判定                                               |
+//+------------------------------------------------------------------+
+bool ShouldEnterUp()
+{
+    if(Use3TimeFrames) {
+        // 上位時間足が上昇で、修正が終わったら買い
+        return (environment.dominantDirection == 1 && currentWave.isUptrend);
+    } else {
+        // 単純に上昇波の修正で買い
+        return currentWave.isUptrend;
+    }
+}
+
+//+------------------------------------------------------------------+
+//| 買いポジション開設                                               |
+//+------------------------------------------------------------------+
+void OpenBuyPosition()
+{
+    double lotSize = CalculateLotSize();
+    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+    double atr = GetATR(14);
+    
+    // ストップロス：修正開始点の少し下
+    double sl = ask - atr * 2;
+    
+    // テイクプロフィット：波の延長に応じて設定
+    double tp;
+    if(currentWave.isExtended) {
+        tp = ask + atr * (FiboTarget_S42 / 100); // 延長時はS42
+    } else {
+        tp = ask + atr * (FiboTarget_S16 / 100); // 通常はS16
+    }
+    
+    string comment = StringFormat("Naito_%s_%.1f%%", 
+                                  correction.correctionType == 1 ? "Sharp" : 
+                                  correction.correctionType == 2 ? "Range" : "Zigzag",
+                                  correction.retracement);
+    
+    if(trade.Buy(lotSize, _Symbol, ask, sl, tp, comment)) {
+        todayTrades++;
+        Print("買いエントリー: Lot=", lotSize, " SL=", sl, " TP=", tp);
+    }
+}
+
+//+------------------------------------------------------------------+
+//| 売りポジション開設                                               |
+//+------------------------------------------------------------------+
+void OpenSellPosition()
+{
+    double lotSize = CalculateLotSize();
+    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+    double atr = GetATR(14);
+    
+    double sl = bid + atr * 2;
+    
+    double tp;
+    if(currentWave.isExtended) {
+        tp = bid - atr * (FiboTarget_S42 / 100);
+    } else {
+        tp = bid - atr * (FiboTarget_S16 / 100);
+    }
+    
+    string comment = StringFormat("Naito_%s_%.1f%%", 
+                                  correction.correctionType == 1 ? "Sharp" : 
+                                  correction.correctionType == 2 ? "Range" : "Zigzag",
+                                  correction.retracement);
+    
+    if(trade.Sell(lotSize, _Symbol, bid, sl, tp, comment)) {
+        todayTrades++;
+        Print("売りエントリー: Lot=", lotSize, " SL=", sl, " TP=", tp);
+    }
+}
+
+//+------------------------------------------------------------------+
+//| ロットサイズ計算                                                 |
+//+------------------------------------------------------------------+
+double CalculateLotSize()
+{
+    double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+    double atr = GetATR(14);
+    
+    // リスク額計算
+    double riskAmount = balance * RiskPercentage / 100;
+    
+    // 負け後の調整
+    if(ReduceLotAfterLoss && IsLastTradeLoss()) {
+        riskAmount *= LotReductionRatio;
+    }
+    
+    // SL幅
+    double slDistance = atr * 2;
+    
+    // ロット計算
+    double tickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+    double tickSize = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
+    double onePipValue = tickValue / tickSize * 0.0001;
+    
+    double lotSize = riskAmount / (slDistance / SymbolInfoDouble(_Symbol, SYMBOL_POINT) * onePipValue);
+    
+    // ロット調整
+    double minLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+    double maxLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
+    double lotStep = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+    
+    lotSize = MathFloor(lotSize / lotStep) * lotStep;
+    lotSize = MathMax(minLot, MathMin(maxLot, lotSize));
+    
+    return lotSize;
+}
+
+//+------------------------------------------------------------------+
+//| 前回取引が負けかチェック                                         |
+//+------------------------------------------------------------------+
+bool IsLastTradeLoss()
+{
+    // 履歴から前回取引の結果を確認
+    if(!HistorySelect(TimeCurrent() - 86400, TimeCurrent())) return false;
+    
+    int total = HistoryDealsTotal();
+    if(total < 2) return false;
+    
+    ulong ticket = HistoryDealGetTicket(total - 1);
+    double profit = HistoryDealGetDouble(ticket, DEAL_PROFIT);
+    
+    return (profit < 0);
+}
+
+//+------------------------------------------------------------------+
+//| トレンドエントリーチェック                                       |
+//+------------------------------------------------------------------+
+void CheckTrendEntry()
+{
+    // トレンドフォロー用（修正トレードがfalseの場合）
+    // 実装省略（修正トレードを推奨）
+}
+
+//+------------------------------------------------------------------+
+//| エグジット管理                                                   |
+//+------------------------------------------------------------------+
+void ManageExits()
+{
+    for(int i = PositionsTotal() - 1; i >= 0; i--) {
+        if(!position.SelectByIndex(i)) continue;
+        if(position.Symbol() != _Symbol || position.Magic() != MagicNumber) continue;
+        
+        // naitoさんの理論：修正で早期利確
+        if(EarlyExitOnCorrection && ShouldExitEarly()) {
+            trade.PositionClose(position.Ticket());
+            Print("修正による早期利確: Profit=", position.Profit());
+        }
+        
+        // 建値移動
+        MoveToBreakeven();
+    }
+}
+
+//+------------------------------------------------------------------+
+//| 早期エグジット判定                                               |
+//+------------------------------------------------------------------+
+bool ShouldExitEarly()
+{
+    // 利益が出ていて、修正のサインが出現
+    if(position.Profit() <= 0) return false;
+    
+    // 現在価格とエントリー価格の関係
+    double entryPrice = position.PriceOpen();
+    double currentPrice = position.PositionType() == POSITION_TYPE_BUY ? 
+                         SymbolInfoDouble(_Symbol, SYMBOL_BID) : 
+                         SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+    
+    double profitPips = MathAbs(currentPrice - entryPrice) / SymbolInfoDouble(_Symbol, SYMBOL_POINT) / 10;
+    
+    // 10pips以上利益があり、修正のサインが出現
+    if(profitPips >= 10 && IsCorrection_End()) {
+        return true;
+    }
+    
+    // CorrectionExitRatio到達
+    double targetDistance = MathAbs(position.TakeProfit() - entryPrice);
+    double currentDistance = MathAbs(currentPrice - entryPrice);
+    
+    return (currentDistance >= targetDistance * CorrectionExitRatio);
+}
+
+//+------------------------------------------------------------------+
+//| 建値移動                                                         |
+//+------------------------------------------------------------------+
+void MoveToBreakeven()
+{
+    double entryPrice = position.PriceOpen();
+    double currentPrice = position.PositionType() == POSITION_TYPE_BUY ? 
+                         SymbolInfoDouble(_Symbol, SYMBOL_BID) : 
+                         SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+    
+    double profitPips = 0;
+    if(position.PositionType() == POSITION_TYPE_BUY) {
+        profitPips = (currentPrice - entryPrice) / SymbolInfoDouble(_Symbol, SYMBOL_POINT) / 10;
+    } else {
+        profitPips = (entryPrice - currentPrice) / SymbolInfoDouble(_Symbol, SYMBOL_POINT) / 10;
+    }
+    
+    // 20pips利益で建値に移動
+    if(profitPips >= 20 && position.StopLoss() != entryPrice) {
+        double newSL = entryPrice;
+        if(position.PositionType() == POSITION_TYPE_BUY) {
+            newSL += SymbolInfoInteger(_Symbol, SYMBOL_SPREAD) * SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+        } else {
+            newSL -= SymbolInfoInteger(_Symbol, SYMBOL_SPREAD) * SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+        }
+        
+        trade.PositionModify(position.Ticket(), newSL, position.TakeProfit());
+    }
+}
+
+//+------------------------------------------------------------------+
+//| 日次リセット                                                     |
+//+------------------------------------------------------------------+
+void CheckDailyReset()
+{
+    MqlDateTime currentTime;
+    TimeToStruct(TimeCurrent(), currentTime);
+    
+    MqlDateTime lastTime;
+    TimeToStruct(lastTradeDay, lastTime);
+    
+    if(lastTradeDay == 0 || currentTime.day != lastTime.day) {
+        todayTrades = 0;
+        todayProfit = 0;
+        lastTradeDay = TimeCurrent();
+        tradingEnabled = true;
+        
+        Print("新しい取引日: ", TimeToString(TimeCurrent(), TIME_DATE));
+    }
+}
+
+//+------------------------------------------------------------------+
+//| ドローダウン制限チェック                                         |
+//+------------------------------------------------------------------+
+void CheckDrawdownLimit()
+{
+    double currentBalance = AccountInfoDouble(ACCOUNT_BALANCE);
+    double drawdown = (startingBalance - currentBalance) / startingBalance * 100;
+    
+    if(drawdown >= MaxDrawdownPercent) {
+        tradingEnabled = false;
+        Print("最大ドローダウン到達: ", drawdown, "% - 取引停止");
+        
+        if(StopTradingOnLimit) {
+            // 全ポジション決済
+            for(int i = PositionsTotal() - 1; i >= 0; i--) {
+                if(position.SelectByIndex(i) && position.Magic() == MagicNumber) {
+                    trade.PositionClose(position.Ticket());
+                }
+            }
+        }
+    }
+}
+
+//+------------------------------------------------------------------+
+//| 統計表示                                                         |
+//+------------------------------------------------------------------+
+void ShowStatistics()
+{
+    string stats = StringFormat(
+        "\n=== Naito Method EA 統計 ===\n"
+        "本日取引数: %d/%d\n"
+        "本日損益: %.2f\n"
+        "現在環境: %s\n"
+        "修正状態: %s (%.1f%%)\n"
+        "波動延長: %s\n"
+        "取引可能: %s\n",
+        todayTrades, MaxDailyTrades,
+        todayProfit,
+        environment.dominantDirection == 1 ? "上昇" : environment.dominantDirection == -1 ? "下降" : "不明",
+        correction.isActive ? "有効" : "無効", correction.retracement,
+        currentWave.isExtended ? "延長中" : "通常",
+        tradingEnabled ? "可能" : "停止"
+    );
+    
+    Comment(stats);
+}
+
+//+------------------------------------------------------------------+
+//| OnTimer                                                          |
+//+------------------------------------------------------------------+
+void OnTimer()
+{
+    ShowStatistics();
+}
