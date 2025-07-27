@@ -21,7 +21,7 @@ export default function DashboardContent({ data }: DashboardContentProps) {
       <ProgressTracker currentBalance={data.currentBalance} />
 
       {/* 最近のアクティビティ */}
-      <RecentActivity entries={data.recentEntries} />
+      <RecentActivity entries={[]} />
     </div>
   );
 }

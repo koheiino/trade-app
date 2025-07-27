@@ -1,47 +1,117 @@
 'use client';
 
-import { Mail, Lock, ArrowRight, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import {
+  Mail,
+  Lock,
+  ArrowRight,
+  AlertCircle,
+  Eye,
+  EyeOff,
+  Settings,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { validateLoginCredentials } from '@/utils/validation';
+import { getErrorMessage, logError, ErrorMessages } from '@/utils/errorHandler';
+import { LocalAuthService } from '@/lib/local-auth';
+import LocalLoginDialog from '@/components/dev/LocalLoginDialog';
+import type { AuthFormState, LoginCredentials } from '@/types/auth';
+import type { LocalUser } from '@/lib/local-auth';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [formState, setFormState] = useState<AuthFormState>({
+    email: '',
+    password: '',
+    loading: false,
+    error: '',
+    showPassword: false,
+  });
+  const [showLocalDialog, setShowLocalDialog] = useState(false);
+
+  const handleInputChange = (
+    field: keyof AuthFormState,
+    value: string | boolean,
+  ) => {
+    console.log('handleInputChange called:', field, value);
+    setFormState((prev) => {
+      const newState = {
+        ...prev,
+        [field]: value,
+        error: '', // Clear error when user starts typing
+      };
+      console.log('New form state:', newState);
+      return newState;
+    });
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
+
+    const credentials: LoginCredentials = {
+      email: formState.email.trim(),
+      password: formState.password,
+    };
+
+    // Validate input
+    const validationErrors = validateLoginCredentials(credentials);
+    if (Object.keys(validationErrors).length > 0) {
+      const firstError = Object.values(validationErrors)[0];
+      setFormState((prev) => ({ ...prev, error: firstError }));
+      return;
+    }
+
+    setFormState((prev) => ({ ...prev, loading: true, error: '' }));
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      // まずローカル認証を試行
+      const localUser = LocalAuthService.login(
+        credentials.email,
+        credentials.password,
+      );
+      if (localUser) {
+        handleLocalLogin(localUser);
+        return;
+      }
+
+      // Supabase認証を試行
+      const { error } = await supabase.auth.signInWithPassword(credentials);
+
+      if (error) {
+        // Map Supabase errors to user-friendly messages
+        let errorMessage: string = ErrorMessages.AUTH.LOGIN_FAILED;
+
+        if (error.message.includes('Invalid login credentials')) {
+          errorMessage = ErrorMessages.AUTH.INVALID_CREDENTIALS;
+        } else if (error.message.includes('Email not confirmed')) {
+          errorMessage = ErrorMessages.AUTH.EMAIL_NOT_VERIFIED;
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      router.push('/dashboard');
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      logError(error, {
+        context: 'LoginPage.handleLogin',
+        email: credentials.email,
       });
 
-      if (error) throw error;
-
-      router.push('/');
-    } catch (error: unknown) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'message' in error &&
-        typeof (error as { message?: string }).message === 'string'
-      ) {
-        setError((error as { message: string }).message);
-      } else {
-        setError('ログインに失敗しました');
-      }
-    } finally {
-      setLoading(false);
+      setFormState((prev) => ({
+        ...prev,
+        error: errorMessage,
+        loading: false,
+      }));
     }
+  };
+
+  const handleLocalLogin = (user: LocalUser) => {
+    // ローカルユーザー情報を保存して遷移
+    console.log('Local user logged in:', user);
+    router.push('/dashboard');
   };
 
   return (
@@ -65,12 +135,14 @@ export default function LoginPage() {
             <div className="relative">
               <Mail className="absolute left-3 top-3 w-5 h-5 text-neutral-400" />
               <input
+                id="email"
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={formState.email}
+                onChange={(e) => handleInputChange('email', e.target.value)}
                 placeholder="your@email.com"
                 className="w-full pl-10 pr-4 py-3 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
                 required
+                disabled={formState.loading}
               />
             </div>
           </div>
@@ -86,20 +158,44 @@ export default function LoginPage() {
               <Lock className="absolute left-3 top-3 w-5 h-5 text-neutral-400" />
               <input
                 id="password"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                type={formState.showPassword ? 'text' : 'password'}
+                value={formState.password}
+                onChange={(e) => handleInputChange('password', e.target.value)}
                 placeholder="••••••••"
                 className="w-full pl-10 pr-12 py-3 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
                 required
+                disabled={formState.loading}
               />
               <button
                 type="button"
-                tabIndex={-1}
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-3 p-1 text-neutral-400 hover:text-neutral-700"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log(
+                    'Password toggle clicked, current:',
+                    formState.showPassword,
+                  );
+                  handleInputChange('showPassword', !formState.showPassword);
+                }}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '12px',
+                  padding: '4px',
+                  color: '#9ca3af',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  opacity: formState.loading ? 0.5 : 1,
+                }}
+                disabled={formState.loading}
+                aria-label={
+                  formState.showPassword
+                    ? 'パスワードを隠す'
+                    : 'パスワードを表示'
+                }
               >
-                {showPassword ? (
+                {formState.showPassword ? (
                   <EyeOff className="w-5 h-5" />
                 ) : (
                   <Eye className="w-5 h-5" />
@@ -108,19 +204,19 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {error && (
+          {formState.error && (
             <div className="p-3 rounded-lg bg-red-50 text-red-700 border border-red-200 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span className="text-sm">{error}</span>
+              <span className="text-sm">{formState.error}</span>
             </div>
           )}
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={formState.loading}
             className="w-full py-3 bg-neutral-900 text-white font-medium rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {loading ? (
+            {formState.loading ? (
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
             ) : (
               <>
@@ -142,7 +238,26 @@ export default function LoginPage() {
             </Link>
           </p>
         </div>
+
+        {/* 開発用・緊急時用認証ボタン */}
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => setShowLocalDialog(true)}
+            className="w-full flex items-center justify-center space-x-2 py-2 px-4 border border-orange-300 text-orange-700 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors text-sm"
+          >
+            <Settings className="w-4 h-4" />
+            <span>開発・緊急時認証</span>
+          </button>
+        </div>
       </div>
+
+      {/* ローカル認証ダイアログ */}
+      <LocalLoginDialog
+        isOpen={showLocalDialog}
+        onClose={() => setShowLocalDialog(false)}
+        onLogin={handleLocalLogin}
+      />
     </div>
   );
 }

@@ -1,6 +1,13 @@
 'use client';
 
-import { TrendingUp, ArrowLeft, Mail, MessageSquare, Send, CheckCircle } from 'lucide-react';
+import {
+  TrendingUp,
+  ArrowLeft,
+  Mail,
+  MessageSquare,
+  Send,
+  CheckCircle,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -9,26 +16,30 @@ export default function ContactPage() {
     name: '',
     email: '',
     subject: '',
-    message: ''
+    message: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
+  ) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     // 実際の実装では、ここでAPIを呼び出してお問い合わせを送信
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
     setIsSubmitting(false);
     setIsSubmitted(true);
   };
@@ -42,7 +53,9 @@ export default function ContactPage() {
             <div className="flex justify-between items-center py-4">
               <Link href="/" className="flex items-center space-x-2">
                 <TrendingUp className="w-8 h-8 text-neutral-900" />
-                <span className="text-xl font-bold text-neutral-900">FX Trading Diary</span>
+                <span className="text-xl font-bold text-neutral-900">
+                  FX Trading Diary
+                </span>
               </Link>
               <Link
                 href="/"
@@ -65,7 +78,8 @@ export default function ContactPage() {
               お問い合わせを受け付けました
             </h1>
             <p className="text-neutral-600 mb-8">
-              ご連絡いただきありがとうございます。<br />
+              ご連絡いただきありがとうございます。
+              <br />
               通常、1-2営業日以内にご返信いたします。
             </p>
             <Link
@@ -89,7 +103,9 @@ export default function ContactPage() {
           <div className="flex justify-between items-center py-4">
             <Link href="/" className="flex items-center space-x-2">
               <TrendingUp className="w-8 h-8 text-neutral-900" />
-              <span className="text-xl font-bold text-neutral-900">FX Trading Diary</span>
+              <span className="text-xl font-bold text-neutral-900">
+                FX Trading Diary
+              </span>
             </Link>
             <Link
               href="/"
@@ -107,7 +123,9 @@ export default function ContactPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
           {/* Contact Info */}
           <div className="lg:col-span-1">
-            <h1 className="text-3xl font-bold text-neutral-900 mb-6">お問い合わせ</h1>
+            <h1 className="text-3xl font-bold text-neutral-900 mb-6">
+              お問い合わせ
+            </h1>
             <p className="text-neutral-600 mb-8">
               ご質問やご要望がございましたら、お気軽にお問い合わせください。できる限り迅速にご対応いたします。
             </p>
@@ -118,7 +136,9 @@ export default function ContactPage() {
                   <Mail className="w-6 h-6 text-blue-600" />
                 </div>
                 <div>
-                  <h3 className="font-medium text-neutral-900 mb-1">メールアドレス</h3>
+                  <h3 className="font-medium text-neutral-900 mb-1">
+                    メールアドレス
+                  </h3>
                   <p className="text-neutral-600">support@fxtradingdiary.com</p>
                 </div>
               </div>
@@ -128,9 +148,12 @@ export default function ContactPage() {
                   <MessageSquare className="w-6 h-6 text-green-600" />
                 </div>
                 <div>
-                  <h3 className="font-medium text-neutral-900 mb-1">対応時間</h3>
+                  <h3 className="font-medium text-neutral-900 mb-1">
+                    対応時間
+                  </h3>
                   <p className="text-neutral-600">
-                    平日 9:00 - 18:00（土日祝日を除く）<br />
+                    平日 9:00 - 18:00（土日祝日を除く）
+                    <br />
                     通常1-2営業日以内にご返信
                   </p>
                 </div>
@@ -138,7 +161,9 @@ export default function ContactPage() {
             </div>
 
             <div className="mt-8 p-4 bg-neutral-50 rounded-lg">
-              <h3 className="font-medium text-neutral-900 mb-2">よくあるお問い合わせ</h3>
+              <h3 className="font-medium text-neutral-900 mb-2">
+                よくあるお問い合わせ
+              </h3>
               <ul className="text-sm text-neutral-600 space-y-1">
                 <li>• アカウントの設定方法</li>
                 <li>• CSV取引データのアップロード方法</li>
@@ -152,12 +177,17 @@ export default function ContactPage() {
           {/* Contact Form */}
           <div className="lg:col-span-2">
             <div className="bg-white border border-neutral-200 rounded-2xl p-8 shadow-sm">
-              <h2 className="text-2xl font-bold text-neutral-900 mb-6">お問い合わせフォーム</h2>
-              
+              <h2 className="text-2xl font-bold text-neutral-900 mb-6">
+                お問い合わせフォーム
+              </h2>
+
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-neutral-700 mb-2">
+                    <label
+                      htmlFor="name"
+                      className="block text-sm font-medium text-neutral-700 mb-2"
+                    >
                       お名前 <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -173,7 +203,10 @@ export default function ContactPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-neutral-700 mb-2">
+                    <label
+                      htmlFor="email"
+                      className="block text-sm font-medium text-neutral-700 mb-2"
+                    >
                       メールアドレス <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -190,7 +223,10 @@ export default function ContactPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="subject" className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label
+                    htmlFor="subject"
+                    className="block text-sm font-medium text-neutral-700 mb-2"
+                  >
                     お問い合わせ種別 <span className="text-red-500">*</span>
                   </label>
                   <select
@@ -213,7 +249,10 @@ export default function ContactPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="message" className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label
+                    htmlFor="message"
+                    className="block text-sm font-medium text-neutral-700 mb-2"
+                  >
                     お問い合わせ内容 <span className="text-red-500">*</span>
                   </label>
                   <textarea
@@ -230,9 +269,13 @@ export default function ContactPage() {
 
                 <div className="text-sm text-neutral-600">
                   <p>
-                    <span className="text-red-500">*</span> は必須項目です。<br />
+                    <span className="text-red-500">*</span> は必須項目です。
+                    <br />
                     個人情報の取り扱いについては、
-                    <Link href="/privacy" className="text-blue-600 hover:underline">
+                    <Link
+                      href="/privacy"
+                      className="text-blue-600 hover:underline"
+                    >
                       プライバシーポリシー
                     </Link>
                     をご確認ください。

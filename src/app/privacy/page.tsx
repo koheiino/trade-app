@@ -12,7 +12,9 @@ export default function PrivacyPage() {
           <div className="flex justify-between items-center py-4">
             <Link href="/" className="flex items-center space-x-2">
               <TrendingUp className="w-8 h-8 text-neutral-900" />
-              <span className="text-xl font-bold text-neutral-900">FX Trading Diary</span>
+              <span className="text-xl font-bold text-neutral-900">
+                FX Trading Diary
+              </span>
             </Link>
             <Link
               href="/"
@@ -28,27 +30,34 @@ export default function PrivacyPage() {
       {/* Content */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="prose prose-neutral max-w-none">
-          <h1 className="text-3xl font-bold text-neutral-900 mb-8">プライバシーポリシー</h1>
-          
-          <p className="text-neutral-600 mb-8">
-            最終更新日：2024年7月27日
-          </p>
+          <h1 className="text-3xl font-bold text-neutral-900 mb-8">
+            プライバシーポリシー
+          </h1>
+
+          <p className="text-neutral-600 mb-8">最終更新日：2025年7月27日</p>
 
           <div className="space-y-8">
             <section>
-              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">1. はじめに</h2>
+              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+                1. はじめに
+              </h2>
               <p className="text-neutral-700 leading-relaxed">
-                FX Trading Diary（以下「当社」といいます。）は、お客様の個人情報の保護を重要視し、個人情報の保護に関する法律、その他の関係法令を遵守するとともに、以下のプライバシーポリシー（以下「本ポリシー」といいます。）に従って、個人情報を適切に取り扱います。
+                FX Trading
+                Diary（以下「当社」といいます。）は、お客様の個人情報の保護を重要視し、個人情報の保護に関する法律、その他の関係法令を遵守するとともに、以下のプライバシーポリシー（以下「本ポリシー」といいます。）に従って、個人情報を適切に取り扱います。
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">2. 収集する情報</h2>
+              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+                2. 収集する情報
+              </h2>
               <p className="text-neutral-700 leading-relaxed mb-4">
                 当社は、本サービスの提供にあたり、以下の個人情報を収集いたします。
               </p>
-              
-              <h3 className="text-xl font-medium text-neutral-900 mb-3">2.1 お客様から直接提供される情報</h3>
+
+              <h3 className="text-xl font-medium text-neutral-900 mb-3">
+                2.1 お客様から直接提供される情報
+              </h3>
               <ul className="list-disc list-inside space-y-2 text-neutral-700 leading-relaxed mb-4">
                 <li>氏名、メールアドレス</li>
                 <li>パスワード（暗号化して保存）</li>
@@ -59,7 +68,9 @@ export default function PrivacyPage() {
                 <li>お問い合わせ内容</li>
               </ul>
 
-              <h3 className="text-xl font-medium text-neutral-900 mb-3">2.2 自動的に収集される情報</h3>
+              <h3 className="text-xl font-medium text-neutral-900 mb-3">
+                2.2 自動的に収集される情報
+              </h3>
               <ul className="list-disc list-inside space-y-2 text-neutral-700 leading-relaxed">
                 <li>IPアドレス</li>
                 <li>ブラウザの種類・バージョン</li>
@@ -71,7 +82,9 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">3. 情報の利用目的</h2>
+              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+                3. 情報の利用目的
+              </h2>
               <p className="text-neutral-700 leading-relaxed mb-4">
                 当社は、収集した個人情報を以下の目的で利用いたします。
               </p>
@@ -84,47 +97,71 @@ export default function PrivacyPage() {
                 <li>料金決済・課金管理</li>
                 <li>利用規約違反の調査・対応</li>
                 <li>重要なお知らせの配信</li>
-                <li>マーケティング・プロモーション活動（同意をいただいた場合のみ）</li>
+                <li>
+                  マーケティング・プロモーション活動（同意をいただいた場合のみ）
+                </li>
                 <li>法令に基づく対応</li>
               </ul>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">4. 第三者への提供</h2>
+              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+                4. 第三者への提供
+              </h2>
               <p className="text-neutral-700 leading-relaxed mb-4">
                 当社は、以下の場合を除き、個人情報を第三者に提供いたしません。
               </p>
               <ul className="list-disc list-inside space-y-2 text-neutral-700 leading-relaxed">
                 <li>お客様の同意がある場合</li>
                 <li>法令に基づく場合</li>
-                <li>人の生命、身体または財産の保護のために必要がある場合であって、本人の同意を得ることが困難である場合</li>
-                <li>公衆衛生の向上または児童の健全な育成の推進のために特に必要がある場合であって、本人の同意を得ることが困難である場合</li>
-                <li>国の機関もしくは地方公共団体またはその委託を受けた者が法令の定める事務を遂行することに対して協力する必要がある場合であって、本人の同意を得ることにより当該事務の遂行に支障を及ぼすおそれがある場合</li>
+                <li>
+                  人の生命、身体または財産の保護のために必要がある場合であって、本人の同意を得ることが困難である場合
+                </li>
+                <li>
+                  公衆衛生の向上または児童の健全な育成の推進のために特に必要がある場合であって、本人の同意を得ることが困難である場合
+                </li>
+                <li>
+                  国の機関もしくは地方公共団体またはその委託を受けた者が法令の定める事務を遂行することに対して協力する必要がある場合であって、本人の同意を得ることにより当該事務の遂行に支障を及ぼすおそれがある場合
+                </li>
               </ul>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">5. 第三者サービスの利用</h2>
+              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+                5. 第三者サービスの利用
+              </h2>
               <p className="text-neutral-700 leading-relaxed mb-4">
                 本サービスでは、以下の第三者サービスを利用しており、それぞれのプライバシーポリシーに従って情報が処理されます。
               </p>
               <ul className="list-disc list-inside space-y-2 text-neutral-700 leading-relaxed">
-                <li><strong>Supabase</strong>: データベース・認証サービス</li>
-                <li><strong>OpenAI</strong>: AI感情分析サービス</li>
-                <li><strong>Stripe</strong>: 決済処理サービス</li>
-                <li><strong>Vercel</strong>: ホスティングサービス</li>
+                <li>
+                  <strong>Supabase</strong>: データベース・認証サービス
+                </li>
+                <li>
+                  <strong>OpenAI</strong>: AI感情分析サービス
+                </li>
+                <li>
+                  <strong>Stripe</strong>: 決済処理サービス
+                </li>
+                <li>
+                  <strong>Vercel</strong>: ホスティングサービス
+                </li>
               </ul>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">6. データの保存期間</h2>
+              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+                6. データの保存期間
+              </h2>
               <p className="text-neutral-700 leading-relaxed">
                 当社は、個人情報を利用目的の達成に必要な期間のみ保存いたします。アカウント削除後は、法令で定められた保存義務のある情報を除き、個人情報を削除いたします。ただし、サービス改善のための統計データについては、個人を特定できない形で保存する場合があります。
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">7. データセキュリティ</h2>
+              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+                7. データセキュリティ
+              </h2>
               <p className="text-neutral-700 leading-relaxed mb-4">
                 当社は、個人情報の保護のため、以下のセキュリティ対策を実施しています。
               </p>
@@ -138,7 +175,9 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">8. Cookieの使用</h2>
+              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+                8. Cookieの使用
+              </h2>
               <p className="text-neutral-700 leading-relaxed mb-4">
                 当社は、サービスの利便性向上のためCookieを使用しています。Cookieの使用目的は以下の通りです。
               </p>
@@ -154,7 +193,9 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">9. お客様の権利</h2>
+              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+                9. お客様の権利
+              </h2>
               <p className="text-neutral-700 leading-relaxed mb-4">
                 お客様は、自己の個人情報について、以下の権利を有します。
               </p>
@@ -170,45 +211,59 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">10. 未成年者の個人情報</h2>
+              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+                10. 未成年者の個人情報
+              </h2>
               <p className="text-neutral-700 leading-relaxed">
                 当社は、18歳未満の方からの個人情報の収集は行いません。18歳未満の方が本サービスを利用される場合は、保護者の同意が必要です。
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">11. 国際的なデータ転送</h2>
+              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+                11. 国際的なデータ転送
+              </h2>
               <p className="text-neutral-700 leading-relaxed">
                 本サービスで使用する第三者サービス（OpenAI、Stripe等）は海外に拠点を置く場合があり、個人情報が海外に転送される可能性があります。これらのサービスは適切なプライバシー保護措置を講じています。
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">12. プライバシーポリシーの変更</h2>
+              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+                12. プライバシーポリシーの変更
+              </h2>
               <p className="text-neutral-700 leading-relaxed">
                 当社は、法令の変更やサービス内容の変更等に伴い、本ポリシーを変更する場合があります。重要な変更については、サービス内での通知やメールでお知らせいたします。
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">13. お問い合わせ</h2>
+              <h2 className="text-2xl font-semibold text-neutral-900 mb-4">
+                13. お問い合わせ
+              </h2>
               <p className="text-neutral-700 leading-relaxed mb-4">
                 個人情報の取り扱いに関するお問い合わせは、以下の連絡先までご連絡ください。
               </p>
               <div className="bg-neutral-50 p-4 rounded-lg">
                 <p className="text-neutral-700">
-                  <strong>FX Trading Diary</strong><br />
-                  メール: privacy@fxtradingdiary.com<br />
-                  お問い合わせフォーム: <Link href="/contact" className="text-blue-600 hover:underline">/contact</Link>
+                  <strong>FX Trading Diary</strong>
+                  <br />
+                  メール: privacy@fxtradingdiary.com
+                  <br />
+                  お問い合わせフォーム:{' '}
+                  <Link
+                    href="/contact"
+                    className="text-blue-600 hover:underline"
+                  >
+                    /contact
+                  </Link>
                 </p>
               </div>
             </section>
           </div>
 
           <div className="mt-12 pt-8 border-t border-neutral-200">
-            <p className="text-sm text-neutral-500">
-              以上
-            </p>
+            <p className="text-sm text-neutral-500">以上</p>
           </div>
         </div>
       </div>

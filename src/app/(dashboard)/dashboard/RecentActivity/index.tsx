@@ -1,7 +1,7 @@
-import type { TradeEntry } from '../../../../types/dashboard';
+import type { Trade } from '../../../../types/trade';
 
 interface RecentActivityProps {
-  entries: TradeEntry[];
+  entries: Trade[];
 }
 
 export default function RecentActivity({ entries }: RecentActivityProps) {
@@ -28,23 +28,23 @@ export default function RecentActivity({ entries }: RecentActivityProps) {
             <div className="flex items-center gap-4">
               <div
                 className={`w-3 h-3 rounded-full ${
-                  entry.profit > 0 ? 'bg-green-500' : 'bg-red-500'
+                  (entry.pnl || 0) > 0 ? 'bg-green-500' : 'bg-red-500'
                 }`}
               />
               <div>
                 <p className="font-medium text-gray-900">
-                  {new Date(entry.date).toLocaleDateString('ja-JP')}
+                  {new Date(entry.entryTime).toLocaleDateString('ja-JP')}
                 </p>
                 <p className="text-sm text-gray-500">{entry.notes}</p>
               </div>
             </div>
             <p
               className={`font-semibold ${
-                entry.profit > 0 ? 'text-green-600' : 'text-red-600'
+                (entry.pnl || 0) > 0 ? 'text-green-600' : 'text-red-600'
               }`}
             >
-              {entry.profit > 0 ? '+' : ''}¥
-              {Math.abs(entry.profit).toLocaleString()}
+              {(entry.pnl || 0) > 0 ? '+' : ''}¥
+              {Math.abs(entry.pnl || 0).toLocaleString()}
             </p>
           </div>
         ))}
