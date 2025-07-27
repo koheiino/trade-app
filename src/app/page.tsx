@@ -1,6 +1,16 @@
 'use client';
 
-import { TrendingUp, Brain, BarChart3, FileText, ArrowRight, CheckCircle, Star, Users, Shield } from 'lucide-react';
+import {
+  TrendingUp,
+  Brain,
+  BarChart3,
+  FileText,
+  ArrowRight,
+  CheckCircle,
+  Star,
+  Users,
+  Shield,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -11,28 +21,32 @@ export default function LandingPage() {
     {
       icon: TrendingUp,
       title: '自動取引記録',
-      description: 'CSV一括アップロードやAPI連携で面倒な記録作業を自動化。MT4/MT5、TradingViewなど主要プラットフォームに対応。',
+      description:
+        'CSV一括アップロードやAPI連携で面倒な記録作業を自動化。MT4/MT5、TradingViewなど主要プラットフォームに対応。',
       iconColor: 'text-blue-600',
       iconBg: 'bg-blue-50',
     },
     {
       icon: Brain,
       title: 'AI感情分析',
-      description: 'OpenAI GPTがあなたの感情ログを分析。感情傾向と勝率の相関を可視化し、メンタル面での改善点を発見。',
+      description:
+        'OpenAI GPTがあなたの感情ログを分析。感情傾向と勝率の相関を可視化し、メンタル面での改善点を発見。',
       iconColor: 'text-purple-600',
       iconBg: 'bg-purple-50',
     },
     {
       icon: BarChart3,
       title: '詳細成績分析',
-      description: '勝率、プロフィットファクター、リスクリワード比など重要指標を自動計算。感情別・時間帯別の詳細フィルタリング機能。',
+      description:
+        '勝率、プロフィットファクター、リスクリワード比など重要指標を自動計算。感情別・時間帯別の詳細フィルタリング機能。',
       iconColor: 'text-green-600',
       iconBg: 'bg-green-50',
     },
     {
       icon: FileText,
       title: 'トレード日記',
-      description: 'Markdownベースのリッチテキストエディタで振り返りを記録。スクリーンショット添付で視覚的な分析も可能。',
+      description:
+        'Markdownベースのリッチテキストエディタで振り返りを記録。スクリーンショット添付で視覚的な分析も可能。',
       iconColor: 'text-orange-600',
       iconBg: 'bg-orange-50',
     },
@@ -48,17 +62,20 @@ export default function LandingPage() {
   const testimonials = [
     {
       name: '田中様（専業トレーダー）',
-      comment: '感情分析機能のおかげで、自分の癖が客観的に見えるようになりました。月間収益が30%向上しました。',
+      comment:
+        '感情分析機能のおかげで、自分の癖が客観的に見えるようになりました。月間収益が30%向上しました。',
       rating: 5,
     },
     {
       name: '山田様（兼業トレーダー）',
-      comment: 'CSV一括アップロード機能で記録が楽になり、分析に時間を使えるようになりました。',
+      comment:
+        'CSV一括アップロード機能で記録が楽になり、分析に時間を使えるようになりました。',
       rating: 5,
     },
     {
       name: '佐藤様（初心者トレーダー）',
-      comment: '振り返り機能で失敗パターンが明確になり、同じミスを繰り返さなくなりました。',
+      comment:
+        '振り返り機能で失敗パターンが明確になり、同じミスを繰り返さなくなりました。',
       rating: 5,
     },
   ];
@@ -71,7 +88,9 @@ export default function LandingPage() {
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-2">
               <TrendingUp className="w-8 h-8 text-neutral-900" />
-              <span className="text-xl font-bold text-neutral-900">FX Trading Diary</span>
+              <span className="text-xl font-bold text-neutral-900">
+                FX Trading Diary
+              </span>
             </div>
             <div className="flex items-center space-x-4">
               <Link
@@ -104,7 +123,7 @@ export default function LandingPage() {
             <br />
             入力負荷ゼロで継続でき、データドリブンな成長を実現します。
           </p>
-          
+
           {/* Email Signup */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8 max-w-md mx-auto">
             <input
@@ -122,7 +141,7 @@ export default function LandingPage() {
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
-          
+
           <p className="text-sm text-neutral-500">
             14日間無料トライアル • クレジットカード不要 • いつでもキャンセル可能
           </p>
@@ -140,15 +159,20 @@ export default function LandingPage() {
               AIと自動化で、従来のトレード記録を革新します
             </p>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {features.map((feature, index) => (
-              <div key={index} className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-8 hover:shadow-md transition-shadow">
+            {features.map((feature) => (
+              <div
+                key={feature.title}
+                className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-8 hover:shadow-md transition-shadow"
+              >
                 <div className="flex items-center mb-6">
                   <div className={`p-3 rounded-xl ${feature.iconBg} mr-4`}>
                     <feature.icon className={`w-6 h-6 ${feature.iconColor}`} />
                   </div>
-                  <h3 className="text-xl font-bold text-neutral-900">{feature.title}</h3>
+                  <h3 className="text-xl font-bold text-neutral-900">
+                    {feature.title}
+                  </h3>
                 </div>
                 <p className="text-neutral-600">{feature.description}</p>
               </div>
@@ -168,21 +192,23 @@ export default function LandingPage() {
                 選ばれるのか？
               </h2>
               <div className="space-y-4">
-                {benefits.map((benefit, index) => (
-                  <div key={index} className="flex items-center">
+                {benefits.map((benefit) => (
+                  <div key={benefit} className="flex items-center">
                     <CheckCircle className="w-5 h-5 text-green-600 mr-3 flex-shrink-0" />
                     <span className="text-neutral-700">{benefit}</span>
                   </div>
                 ))}
               </div>
             </div>
-            
+
             <div className="bg-neutral-900 rounded-2xl p-8 text-white">
               <h3 className="text-2xl font-bold mb-4">従来の方法との違い</h3>
               <div className="space-y-4">
                 <div className="border-l-4 border-red-500 pl-4">
                   <p className="text-red-300 text-sm">従来</p>
-                  <p className="text-neutral-300">手動記録で挫折、感情分析なし</p>
+                  <p className="text-neutral-300">
+                    手動記録で挫折、感情分析なし
+                  </p>
                 </div>
                 <div className="border-l-4 border-green-500 pl-4">
                   <p className="text-green-300 text-sm">FX Trading Diary</p>
@@ -205,17 +231,25 @@ export default function LandingPage() {
               実際にご利用いただいているトレーダーの皆様から
             </p>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {testimonials.map((testimonial, index) => (
-              <div key={index} className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-6">
+            {testimonials.map((testimonial) => (
+              <div
+                key={testimonial.name}
+                className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-6"
+              >
                 <div className="flex items-center mb-4">
-                  {[...Array(testimonial.rating)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
+                  {Array.from({ length: testimonial.rating }, (_, i) => (
+                    <Star
+                      key={`star-${testimonial.name}-${i}`}
+                      className="w-4 h-4 text-yellow-400 fill-current"
+                    />
                   ))}
                 </div>
                 <p className="text-neutral-700 mb-4">"{testimonial.comment}"</p>
-                <p className="text-sm font-medium text-neutral-900">{testimonial.name}</p>
+                <p className="text-sm font-medium text-neutral-900">
+                  {testimonial.name}
+                </p>
               </div>
             ))}
           </div>
@@ -260,7 +294,7 @@ export default function LandingPage() {
           <p className="text-xl text-neutral-300 mb-8">
             14日間の無料トライアルで、AIが分析するトレード日記を体験してください
           </p>
-          
+
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
             <Link
               href="/register"
@@ -276,7 +310,7 @@ export default function LandingPage() {
               既にアカウントをお持ちの方
             </Link>
           </div>
-          
+
           <p className="text-sm text-neutral-400">
             クレジットカード不要 • いつでもキャンセル可能
           </p>
@@ -289,22 +323,33 @@ export default function LandingPage() {
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="flex items-center space-x-2 mb-4 md:mb-0">
               <TrendingUp className="w-6 h-6 text-neutral-900" />
-              <span className="text-lg font-bold text-neutral-900">FX Trading Diary</span>
+              <span className="text-lg font-bold text-neutral-900">
+                FX Trading Diary
+              </span>
             </div>
             <div className="flex items-center space-x-6 text-sm text-neutral-600">
-              <Link href="/privacy" className="hover:text-neutral-900 transition-colors">
+              <Link
+                href="/privacy"
+                className="hover:text-neutral-900 transition-colors"
+              >
                 プライバシーポリシー
               </Link>
-              <Link href="/terms" className="hover:text-neutral-900 transition-colors">
+              <Link
+                href="/terms"
+                className="hover:text-neutral-900 transition-colors"
+              >
                 利用規約
               </Link>
-              <Link href="/contact" className="hover:text-neutral-900 transition-colors">
+              <Link
+                href="/contact"
+                className="hover:text-neutral-900 transition-colors"
+              >
                 お問い合わせ
               </Link>
             </div>
           </div>
           <div className="mt-8 pt-8 border-t border-neutral-200 text-center text-sm text-neutral-500">
-            © 2024 FX Trading Diary. All rights reserved.
+            © 2025 FX Trading Diary. All rights reserved.
           </div>
         </div>
       </footer>

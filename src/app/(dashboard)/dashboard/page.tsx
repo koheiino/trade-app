@@ -2,7 +2,34 @@
 
 import { useState } from 'react';
 import DashboardContent from '@/app/(dashboard)/dashboard/DashboardContent';
-import { mockData } from '../../../utils/constants';
+import type { DashboardData } from '@/types/dashboard';
+
+// 簡単なモックデータ
+const mockData: DashboardData = {
+  currentBalance: 1500000,
+  weeklyProfit: 50000,
+  monthlyProfit: 200000,
+  streakDays: 5,
+  winRate: 75.5,
+  tradingDays: 120,
+  recentTrades: [],
+  recentEmotions: [],
+  recentJournals: [],
+  analytics: {
+    totalTrades: 120,
+    winningTrades: 90,
+    losingTrades: 30,
+    winRate: 75.5,
+    totalPnl: 200000,
+    averageWin: 10000,
+    averageLoss: -5000,
+    profitFactor: 2.0,
+    maxDrawdown: 50000,
+    sharpeRatio: 1.5,
+    consecutiveWins: 7,
+    consecutiveLosses: 3
+  }
+};
 
 export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
