@@ -1,4 +1,4 @@
-
+import { logger } from '@/utils/logger';
 
 // 管理者アカウントの設定
 const ADMIN_ACCOUNTS = [
@@ -104,17 +104,19 @@ export class LocalAuthService {
    */
   static getSession(): LocalUser | null {
     if (typeof window === 'undefined') {
-      console.log('LocalAuthService.getSession: Window is undefined (SSR)');
+      logger.debug('LocalAuth: Window undefined (SSR)');
       return null;
     }
 
     try {
       const session = localStorage.getItem(this.SESSION_KEY);
       const result = session ? JSON.parse(session) : null;
-      console.log('LocalAuthService.getSession: Retrieved session:', result);
+      if (result) {
+        logger.debug('LocalAuth: Session retrieved', { userId: result.id });
+      }
       return result;
     } catch (error) {
-      console.log('LocalAuthService.getSession: Error parsing session:', error);
+      logger.error('LocalAuth: Session parse error', error as Error);
       return null;
     }
   }
@@ -158,7 +160,7 @@ export class LocalAuthService {
    */
   static isValidSession(user: LocalUser | null): boolean {
     if (!user) {
-      console.log('LocalAuthService.isValidSession: No user provided');
+      logger.debug('LocalAuth: No user for session validation');
       return false;
     }
 
@@ -167,8 +169,12 @@ export class LocalAuthService {
     const now = new Date();
     const diffHours = (now.getTime() - loginTime.getTime()) / (1000 * 60 * 60);
     const isValid = diffHours < 24;
-    
-    console.log('LocalAuthService.isValidSession: User:', user.email, 'Hours since login:', diffHours, 'Is valid:', isValid);
+
+    logger.debug('LocalAuth: Session validation', {
+      email: user.email,
+      hoursActive: diffHours.toFixed(2),
+      isValid,
+    });
     return isValid;
   }
 

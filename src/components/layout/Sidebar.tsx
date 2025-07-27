@@ -20,9 +20,10 @@ export default function Sidebar({
   navigationItems,
 }: SidebarProps) {
   const displayEmail = 'email' in user ? user.email : user.email;
-  const displayName = 'isLocal' in user && user.isLocal 
-    ? user.name 
-    : displayEmail?.split('@')[0] || 'User';
+  const displayName =
+    'isLocal' in user && user.isLocal
+      ? user.name
+      : displayEmail?.split('@')[0] || 'User';
 
   return (
     <div className="h-full bg-white border-r border-neutral-200 flex flex-col">

@@ -56,7 +56,7 @@ export default function LocalLoginDialog({
   const accounts = LocalAuthService.getAccountList();
 
   return (
-    <div 
+    <div
       style={{
         position: 'fixed',
         top: 0,
@@ -70,7 +70,7 @@ export default function LocalLoginDialog({
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
       }}
     >
-      <div 
+      <div
         style={{
           backgroundColor: 'white',
           borderRadius: '16px',
@@ -105,7 +105,10 @@ export default function LocalLoginDialog({
 
         <form onSubmit={handleLocalLogin} className="space-y-4 mb-6">
           <div>
-            <label htmlFor="local-email" className="block text-sm font-medium text-neutral-700 mb-2">
+            <label
+              htmlFor="local-email"
+              className="block text-sm font-medium text-neutral-700 mb-2"
+            >
               メールアドレス
             </label>
             <input
@@ -120,7 +123,10 @@ export default function LocalLoginDialog({
           </div>
 
           <div>
-            <label htmlFor="local-password" className="block text-sm font-medium text-neutral-700 mb-2">
+            <label
+              htmlFor="local-password"
+              className="block text-sm font-medium text-neutral-700 mb-2"
+            >
               パスワード
             </label>
             <input

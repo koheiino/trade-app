@@ -3,7 +3,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Mail, ArrowRight, AlertCircle, CheckCircle, Settings } from 'lucide-react';
+import {
+  Mail,
+  ArrowRight,
+  AlertCircle,
+  CheckCircle,
+  Settings,
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import LocalLoginDialog from '@/components/dev/LocalLoginDialog';
 import type { LocalUser } from '@/lib/local-auth';
@@ -25,7 +31,7 @@ export default function RegisterPage() {
   const handleDialogOpen = () => {
     console.log('handleDialogOpen called');
     console.log('Before setState - showLocalDialog:', showLocalDialog);
-    setShowLocalDialog(prev => {
+    setShowLocalDialog((prev) => {
       console.log('setState callback - prev:', prev, 'new:', true);
       return true;
     });

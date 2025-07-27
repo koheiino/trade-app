@@ -1,41 +1,56 @@
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useUserStore } from '@/lib/stores/userStore';
-import { supabase } from '@/lib/supabase';
+/**
+ * 統一認証フック
+ */
 
-export function useAuth(redirectTo?: string) {
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  authManager,
+  type AuthState,
+  type LoginCredentials,
+} from '@/lib/auth-manager';
+
+export function useAuth() {
+  const [authState, setAuthState] = useState<AuthState>(authManager.getState());
   const router = useRouter();
-  const { user, userStats, loading, fetchUserData } = useUserStore();
 
   useEffect(() => {
-    // 初回ロード時にユーザー情報を取得
-    fetchUserData();
-
     // 認証状態の変更を監視
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN') {
-        await fetchUserData();
-      } else if (event === 'SIGNED_OUT') {
-        useUserStore.getState().setUser(null);
-        useUserStore.getState().setUserStats(null);
-        if (redirectTo) {
-          router.push(redirectTo);
-        }
-      }
-    });
+    const unsubscribe = authManager.subscribe(setAuthState);
+    return unsubscribe;
+  }, []);
 
-    return () => {
-      subscription.unsubscribe();
-    };
-    // 依存配列にfetchUserData, router, redirectToを追加
-  }, [fetchUserData, router, redirectTo]);
+  const login = async (credentials: LoginCredentials) => {
+    const result = await authManager.login(credentials);
+    if (result.success) {
+      router.push('/dashboard');
+    }
+    return result;
+  };
+
+  const logout = async () => {
+    await authManager.logout();
+    router.push('/login');
+  };
+
+  const requireAuth = () => {
+    if (!authState.user && !authState.loading) {
+      router.push('/login');
+    }
+  };
 
   return {
-    user,
-    userStats,
-    loading,
-    isAuthenticated: !!user,
+    // 状態
+    user: authState.user,
+    loading: authState.loading,
+    error: authState.error,
+    isAuthenticated: !!authState.user,
+    isAdmin: authManager.isAdmin(authState.user),
+    isLocal: authState.user ? authManager.isLocalUser(authState.user) : false,
+
+    // アクション
+    login,
+    logout,
+    requireAuth,
   };
 }

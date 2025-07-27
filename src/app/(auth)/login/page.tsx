@@ -81,7 +81,7 @@ export default function LoginPage() {
 
       if (error) {
         // Map Supabase errors to user-friendly messages
-        let errorMessage = ErrorMessages.AUTH.LOGIN_FAILED;
+        let errorMessage: string = ErrorMessages.AUTH.LOGIN_FAILED;
 
         if (error.message.includes('Invalid login credentials')) {
           errorMessage = ErrorMessages.AUTH.INVALID_CREDENTIALS;
@@ -171,7 +171,10 @@ export default function LoginPage() {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  console.log('Password toggle clicked, current:', formState.showPassword);
+                  console.log(
+                    'Password toggle clicked, current:',
+                    formState.showPassword,
+                  );
                   handleInputChange('showPassword', !formState.showPassword);
                 }}
                 style={{

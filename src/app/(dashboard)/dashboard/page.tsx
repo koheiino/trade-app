@@ -27,8 +27,8 @@ const mockData: DashboardData = {
     maxDrawdown: 50000,
     sharpeRatio: 1.5,
     consecutiveWins: 7,
-    consecutiveLosses: 3
-  }
+    consecutiveLosses: 3,
+  },
 };
 
 export default function DashboardPage() {

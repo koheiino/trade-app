@@ -26,7 +26,7 @@ export default function RegisterPageSimple() {
   return (
     <div style={{ padding: '20px', maxWidth: '400px', margin: '0 auto' }}>
       <h1>Register Page (Simple)</h1>
-      
+
       <button
         onClick={() => {
           console.log('Button clicked, current dialogOpen:', dialogOpen);
@@ -47,14 +47,16 @@ export default function RegisterPageSimple() {
       </button>
 
       {dialogOpen && (
-        <div style={{
-          border: '2px solid #ff6b35',
-          padding: '20px',
-          borderRadius: '8px',
-          backgroundColor: '#fff',
-        }}>
+        <div
+          style={{
+            border: '2px solid #ff6b35',
+            padding: '20px',
+            borderRadius: '8px',
+            backgroundColor: '#fff',
+          }}
+        >
           <h3>ローカル認証</h3>
-          
+
           <div style={{ marginBottom: '10px' }}>
             <label>Email:</label>
             <input
