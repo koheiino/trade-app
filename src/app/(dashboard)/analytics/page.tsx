@@ -22,6 +22,7 @@ import {
   BarChart,
   Bar,
   PieChart as RechartsPieChart,
+  Pie,
   Cell,
   XAxis,
   YAxis,
@@ -407,11 +408,11 @@ export default function AnalyticsPage() {
                     }}
                   />
                   <Legend />
-                  <RechartsPieChart data={sampleData.emotionAnalysis} dataKey="trades" nameKey="emotion">
+                  <Pie data={sampleData.emotionAnalysis} dataKey="trades" nameKey="emotion">
                     {sampleData.emotionAnalysis.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.fill} />
                     ))}
-                  </RechartsPieChart>
+                  </Pie>
                 </RechartsPieChart>
               </ResponsiveContainer>
             </div>
